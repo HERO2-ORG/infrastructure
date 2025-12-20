@@ -27,7 +27,7 @@ Deploys applications to remote servers via SSH using Docker Compose.
 **Example Usage:**
 ```yaml
 - name: Deploy to Production
-  uses: HERO2/infrastructure/.github/actions/ssh-deploy@main
+  uses: HERO2-ORG/infrastructure/.github/actions/ssh-deploy@main
   with:
     host: ${{ secrets.SERVER_IP }}
     user: ${{ secrets.SERVER_USER }}
@@ -49,7 +49,7 @@ Validates service availability by checking health endpoints with retry logic.
 **Example Usage:**
 ```yaml
 - name: Verify Deployment
-  uses: HERO2/infrastructure/.github/actions/health-check@main
+  uses: HERO2-ORG/infrastructure/.github/actions/health-check@main
   with:
     url: https://api.hero2.org/health
     max-attempts: 5
@@ -73,7 +73,7 @@ Automated semantic versioning for Node.js projects using conventional commits.
 **Example Usage:**
 ```yaml
 - name: Semantic Release
-  uses: HERO2/infrastructure/.github/actions/semantic-release-node@main
+  uses: HERO2-ORG/infrastructure/.github/actions/semantic-release-node@main
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -96,7 +96,7 @@ Automated semantic versioning for Flutter projects.
 **Example Usage:**
 ```yaml
 - name: Semantic Release
-  uses: HERO2/infrastructure/.github/actions/semantic-release-flutter@main
+  uses: HERO2-ORG/infrastructure/.github/actions/semantic-release-flutter@main
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -116,7 +116,7 @@ Runs Lighthouse performance checks on websites.
 **Example Usage:**
 ```yaml
 - name: Lighthouse Check
-  uses: HERO2/infrastructure/.github/actions/lighthouse-check@main
+  uses: HERO2-ORG/infrastructure/.github/actions/lighthouse-check@main
   with:
     url: https://hero2.org
 ```
@@ -139,7 +139,7 @@ Builds and pushes Docker images to container registries.
 **Example Usage:**
 ```yaml
 - name: Build and Push
-  uses: HERO2/infrastructure/.github/actions/docker-build-push@main
+  uses: HERO2-ORG/infrastructure/.github/actions/docker-build-push@main
   with:
     context: .
     image-name: hero2original/hero2backend
@@ -159,7 +159,7 @@ Base configuration for semantic-release. Repositories can extend this by creatin
 
 ```json
 {
-  "extends": "https://raw.githubusercontent.com/HERO2/infrastructure/main/configs/.releaserc.base.json"
+  "extends": "https://raw.githubusercontent.com/HERO2-ORG/infrastructure/main/configs/.releaserc.base.json"
 }
 ```
 
@@ -183,7 +183,7 @@ See `configs/.markdownlint.yaml` for inline comments explaining each rule.
 ```yaml
 - uses: DavidAnson/markdownlint-cli2-action@v18
   with:
-    config: 'https://raw.githubusercontent.com/HERO2/infrastructure/main/configs/.markdownlint.yaml'
+    config: 'https://raw.githubusercontent.com/HERO2-ORG/infrastructure/main/configs/.markdownlint.yaml'
     globs: '**/*.md'
 ```
 
@@ -215,7 +215,7 @@ Enforces conventional commit message format.
 - run: |
     npm install -g @commitlint/cli @commitlint/config-conventional
     echo "${{ github.event.pull_request.title }}" | commitlint \
-      --config https://raw.githubusercontent.com/HERO2/infrastructure/main/configs/commitlint.config.js
+      --config https://raw.githubusercontent.com/HERO2-ORG/infrastructure/main/configs/commitlint.config.js
 ```
 
 ### Private Repository Access
