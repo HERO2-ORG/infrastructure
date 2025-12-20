@@ -1,0 +1,8 @@
+# Shared lychee configuration for HERO2 repositories.
+# Keep this file environment agnostic so every workflow can reuse it.
+exclude = [
+  "http://localhost",
+  "https://localhost",
+  "http://127.0.0.1",
+  "https://127.0.0.1"
+]
