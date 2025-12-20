@@ -1,0 +1,29 @@
+name: 'Semantic Release (Node.js)'
+description: 'Automated semantic versioning for Node.js projects'
+inputs:
+  github-token:
+    description: 'GitHub token for creating releases'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install semantic-release
+      shell: bash
+      run: |
+        npm install -g \
+          semantic-release \
+          @semantic-release/git \
+          @semantic-release/changelog \
+          @semantic-release/github \
+          conventional-changelog-conventionalcommits
+
+    - name: Run semantic release
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: npx semantic-release

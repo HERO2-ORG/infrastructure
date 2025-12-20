@@ -1,0 +1,65 @@
+name: 'Semantic Release (Flutter)'
+description: 'Automated semantic versioning for Flutter projects'
+inputs:
+  github-token:
+    description: 'GitHub token for creating releases'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install semantic-release
+      shell: bash
+      run: |
+        npm install -g \
+          semantic-release \
+          @semantic-release/git \
+          @semantic-release/changelog \
+          @semantic-release/github \
+          conventional-changelog-conventionalcommits
+
+    - name: Get next version
+      id: version
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        VERSION=$(npx semantic-release --dry-run 2>&1 | grep "next release version" | sed -n 's/.*next release version is \([0-9.]*\).*/\1/p')
+        if [ -z "$VERSION" ]; then
+          echo "No release needed"
+          echo "skip=true" >> $GITHUB_OUTPUT
+        else
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Update pubspec.yaml
+      if: steps.version.outputs.skip == 'false'
+      shell: bash
+      run: |
+        sed -i.bak "s/^version:.*/version: ${{ steps.version.outputs.version }}/" pubspec.yaml
+        rm pubspec.yaml.bak
+
+    - name: Commit and tag
+      if: steps.version.outputs.skip == 'false'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add pubspec.yaml
+        git commit -m "chore(release): ${{ steps.version.outputs.version }} [skip ci]"
+        git tag "v${{ steps.version.outputs.version }}"
+        git push && git push --tags
+
+    - name: Create GitHub Release
+      if: steps.version.outputs.skip == 'false'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: npx semantic-release

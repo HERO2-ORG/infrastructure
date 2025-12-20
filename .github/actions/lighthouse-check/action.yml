@@ -1,0 +1,15 @@
+name: 'Lighthouse CI'
+description: 'Run Lighthouse performance checks on website'
+inputs:
+  url:
+    description: 'URL to test'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Lighthouse CI
+      uses: treosh/lighthouse-ci-action@v11
+      with:
+        urls: ${{ inputs.url }}
+        uploadArtifacts: true
+        temporaryPublicStorage: true

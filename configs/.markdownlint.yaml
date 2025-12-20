@@ -1,0 +1,13 @@
+# Markdownlint configuration for Hero2 repositories
+# See https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md for all rules
+
+# Enable all rules by default
+default: true
+
+# MD013 - Line length
+# Disabled to allow long lines for links, tables, and code examples
+MD013: false
+
+# MD045 - Images should have alternate text (alt text)
+# Disabled to allow images without alt text in documentation
+MD045: false

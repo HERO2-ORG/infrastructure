@@ -1,0 +1,44 @@
+name: 'SSH Deploy'
+description: 'Deploy to server via SSH using Docker Compose'
+inputs:
+  host:
+    description: 'Server IP address'
+    required: true
+  user:
+    description: 'SSH username'
+    required: true
+  key:
+    description: 'SSH private key'
+    required: true
+  compose-file:
+    description: 'Path to docker-compose file'
+    required: true
+  remote-path:
+    description: 'Remote deployment directory'
+    required: true
+  environment:
+    description: 'Environment name (staging/production)'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Copy compose file
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ inputs.host }}
+        username: ${{ inputs.user }}
+        key: ${{ inputs.key }}
+        source: ${{ inputs.compose-file }}
+        target: ${{ inputs.remote-path }}
+
+    - name: Deploy with Docker Compose
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ inputs.host }}
+        username: ${{ inputs.user }}
+        key: ${{ inputs.key }}
+        script: |
+          cd ${{ inputs.remote-path }}
+          docker compose pull
+          docker compose up -d --force-recreate
+          docker image prune -f
