@@ -1,2 +1,12 @@
 .idea
 .DS_Store
+
+# iOS Certificates and Provisioning Profiles
+*.cer
+*.p12
+*.mobileprovision
+*.developerprofile
+
+# Certificate directories
+certs/
+profiles/
