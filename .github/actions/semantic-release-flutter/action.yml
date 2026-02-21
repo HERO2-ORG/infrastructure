@@ -24,6 +24,15 @@ runs:
           @semantic-release/github \
           conventional-changelog-conventionalcommits
 
+    - name: Download shared config
+      shell: bash
+      run: |
+        mkdir -p configs
+        curl -sL https://raw.githubusercontent.com/HERO2-ORG/infrastructure/main/configs/.releaserc.base.json -o configs/.releaserc.base.json
+        if [ -f .releaserc.json ]; then
+          sed -i 's|https://raw.githubusercontent.com/HERO2-ORG/infrastructure/main/configs/.releaserc.base.json|./configs/.releaserc.base.json|g' .releaserc.json
+        fi
+
     - name: Get next version
       id: version
       shell: bash
