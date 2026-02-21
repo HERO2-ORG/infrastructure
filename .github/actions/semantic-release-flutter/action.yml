@@ -30,7 +30,19 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
-        VERSION=$(npx semantic-release --dry-run 2>&1 | grep "next release version" | sed -n 's/.*next release version is \([0-9.]*\).*/\1/p')
+        set +e
+        OUTPUT=$(npx semantic-release --dry-run 2>&1)
+        EXIT_CODE=$?
+        set -e
+
+        echo "$OUTPUT"
+
+        if [ $EXIT_CODE -ne 0 ]; then
+          echo "semantic-release failed with exit code $EXIT_CODE"
+          exit $EXIT_CODE
+        fi
+
+        VERSION=$(echo "$OUTPUT" | grep "next release version" | sed -n 's/.*next release version is \([0-9.]*\).*/\1/p')
         if [ -z "$VERSION" ]; then
           echo "No release needed"
           echo "skip=true" >> $GITHUB_OUTPUT
