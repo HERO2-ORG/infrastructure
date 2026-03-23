@@ -1,33 +1,49 @@
 # Hero2 Infrastructure Repository
 
-This repository serves two purposes:
-1. **CI/CD Infrastructure** - Reusable GitHub Actions and shared configurations
-2. **iOS Code Signing** - Fastlane match certificates and provisioning profiles
+Centralized CI/CD infrastructure for the Hero2 organization — reusable GitHub Actions and shared configurations for consistent workflows across all repositories.
+
+See [WORKFLOW.md](./WORKFLOW.md) for branch naming, PR conventions, and the full development lifecycle.
 
 ---
 
-## CI/CD Infrastructure
+## Repository Contents
 
-Centralized CI/CD infrastructure for the Hero2 organization. Provides reusable GitHub Actions composite actions and shared configurations for consistent workflows across all Hero2 repositories.
+```
+infrastructure/
+├── .github/
+│   └── actions/
+│       ├── docker-build-push/
+│       ├── health-check/
+│       ├── lighthouse-check/
+│       ├── semantic-release-flutter/
+│       ├── semantic-release-node/
+│       └── ssh-deploy/
+└── configs/
+    ├── .markdownlint.yaml
+    ├── .releaserc.base.json
+    ├── commitlint.config.js
+    └── lychee.toml
+```
 
-### Composite Actions
+---
 
-#### 1. SSH Deploy (`ssh-deploy`)
+## Composite Actions
+
+### `ssh-deploy`
 
 Deploys applications to remote servers via SSH using Docker Compose.
 
-**Inputs:**
-- `host` (required): Server IP address
-- `user` (required): SSH username
-- `key` (required): SSH private key
-- `compose-file` (required): Path to docker-compose file
-- `remote-path` (required): Remote deployment directory
-- `environment` (required): Environment name (staging/production)
+| Input | Required | Description |
+|---|---|---|
+| `host` | yes | Server IP address |
+| `user` | yes | SSH username |
+| `key` | yes | SSH private key |
+| `compose-file` | yes | Path to docker-compose file |
+| `remote-path` | yes | Remote deployment directory |
+| `environment` | yes | Environment name (`staging`/`production`) |
 
-**Example Usage:**
 ```yaml
-- name: Deploy to Production
-  uses: HERO2-ORG/infrastructure/.github/actions/ssh-deploy@main
+- uses: HERO2-ORG/infrastructure/.github/actions/ssh-deploy@main
   with:
     host: ${{ secrets.SERVER_IP }}
     user: ${{ secrets.SERVER_USER }}
@@ -37,109 +53,83 @@ Deploys applications to remote servers via SSH using Docker Compose.
     environment: production
 ```
 
-#### 2. Health Check (`health-check`)
+### `health-check`
 
-Validates service availability by checking health endpoints with retry logic.
+Validates service availability by polling a health endpoint with retry logic.
 
-**Inputs:**
-- `url` (required): Health check URL
-- `max-attempts` (optional, default: 5): Maximum retry attempts
-- `retry-delay` (optional, default: 10): Delay between retries (seconds)
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `url` | yes | — | Health check URL |
+| `max-attempts` | no | `5` | Maximum retry attempts |
+| `retry-delay` | no | `10` | Delay between retries (seconds) |
 
-**Example Usage:**
 ```yaml
-- name: Verify Deployment
-  uses: HERO2-ORG/infrastructure/.github/actions/health-check@main
+- uses: HERO2-ORG/infrastructure/.github/actions/health-check@main
   with:
     url: https://api.hero2.org/health
     max-attempts: 5
     retry-delay: 10
 ```
 
-#### 3. Semantic Release Node (`semantic-release-node`)
+### `semantic-release-node`
 
-Automated semantic versioning for Node.js projects using conventional commits.
+Automated semantic versioning for Node.js projects using conventional commits. Analyzes commit messages, bumps the version, generates `CHANGELOG.md`, and creates a GitHub release tagged `v*`.
 
-**Inputs:**
-- `github-token` (required): GitHub token for creating releases
+| Input | Required | Description |
+|---|---|---|
+| `github-token` | yes | GitHub token for creating releases |
 
-**Behavior:**
-- Analyzes conventional commit messages
-- Determines next version (major/minor/patch)
-- Generates CHANGELOG.md
-- Creates GitHub release with release notes
-- Tags release with v* format (e.g., v1.2.3)
-
-**Example Usage:**
 ```yaml
-- name: Semantic Release
-  uses: HERO2-ORG/infrastructure/.github/actions/semantic-release-node@main
+- uses: HERO2-ORG/infrastructure/.github/actions/semantic-release-node@main
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-#### 4. Semantic Release Flutter (`semantic-release-flutter`)
+### `semantic-release-flutter`
 
-Automated semantic versioning for Flutter projects.
+Same as `semantic-release-node` but also updates `pubspec.yaml` and can trigger Xcode Cloud builds when configured to watch `v*` tags.
 
-**Inputs:**
-- `github-token` (required): GitHub token for creating releases
+| Input | Required | Description |
+|---|---|---|
+| `github-token` | yes | GitHub token for creating releases |
 
-**Behavior:**
-- Analyzes conventional commit messages
-- Determines next version
-- Updates pubspec.yaml version field
-- Creates v* tag (e.g., v1.2.3)
-- Creates GitHub release
-- Triggers Xcode Cloud builds (if configured to watch v* tags)
-
-**Example Usage:**
 ```yaml
-- name: Semantic Release
-  uses: HERO2-ORG/infrastructure/.github/actions/semantic-release-flutter@main
+- uses: HERO2-ORG/infrastructure/.github/actions/semantic-release-flutter@main
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-#### 5. Lighthouse CI (`lighthouse-check`)
+### `lighthouse-check`
 
-Runs Lighthouse performance checks on websites.
+Runs a Lighthouse performance audit and uploads the report as a workflow artifact.
 
-**Inputs:**
-- `url` (required): Website URL to test
+| Input | Required | Description |
+|---|---|---|
+| `url` | yes | Website URL to audit |
 
-**Behavior:**
-- Runs Lighthouse performance audit
-- Uploads artifacts (reports)
-- Publishes results to temporary public storage
-
-**Example Usage:**
 ```yaml
-- name: Lighthouse Check
-  uses: HERO2-ORG/infrastructure/.github/actions/lighthouse-check@main
+- uses: HERO2-ORG/infrastructure/.github/actions/lighthouse-check@main
   with:
     url: https://hero2.org
 ```
 
-#### 6. Docker Build and Push (`docker-build-push`)
+### `docker-build-push`
 
-Builds and pushes Docker images to container registries.
+Builds and pushes a Docker image to Docker Hub or GHCR.
 
-**Inputs:**
-- `context` (required): Build context path
-- `image-name` (required): Full image name
-- `tags` (required): Newline-separated list of tags
-- `registry` (required): Registry type (docker-hub or ghcr)
-- `username` (required): Registry username
-- `password` (required): Registry password/token
+| Input | Required | Description |
+|---|---|---|
+| `context` | yes | Build context path |
+| `image-name` | yes | Full image name |
+| `tags` | yes | Newline-separated list of tags |
+| `registry` | yes | `docker-hub` or `ghcr` |
+| `username` | yes | Registry username |
+| `password` | yes | Registry password or token |
 
-**Outputs:**
-- `image-digest`: Image SHA256 digest
+**Output:** `image-digest` — SHA256 digest of the pushed image.
 
-**Example Usage:**
 ```yaml
-- name: Build and Push
-  uses: HERO2-ORG/infrastructure/.github/actions/docker-build-push@main
+- uses: HERO2-ORG/infrastructure/.github/actions/docker-build-push@main
   with:
     context: .
     image-name: hero2original/hero2backend
@@ -151,11 +141,13 @@ Builds and pushes Docker images to container registries.
     password: ${{ secrets.DOCKER_PASSWORD }}
 ```
 
-### Shared Configurations
+---
 
-#### Semantic Release (`.releaserc.base.json`)
+## Shared Configurations
 
-Base configuration for semantic-release. Repositories can extend this by creating their own `.releaserc.json`:
+### `.releaserc.base.json`
+
+Base semantic-release configuration. Extend it in any repository:
 
 ```json
 {
@@ -163,23 +155,10 @@ Base configuration for semantic-release. Repositories can extend this by creatin
 }
 ```
 
-**Features:**
-- Conventional commits analysis
-- Automated CHANGELOG.md generation
-- GitHub release creation
-- Git tag creation
+### `.markdownlint.yaml`
 
-#### Markdown Lint (`.markdownlint.yaml`)
+Markdown linting rules used across all repositories. Reference it in workflows:
 
-Markdown linting configuration with relaxed rules for flexibility.
-
-**Disabled Rules:**
-- **MD013**: Line length - Disabled to allow long lines (links, tables, code examples)
-- **MD045**: Images should have alternate text - Disabled to allow images without alt text in documentation
-
-See `configs/.markdownlint.yaml` for inline comments explaining each rule.
-
-**Usage in Workflows:**
 ```yaml
 - uses: DavidAnson/markdownlint-cli2-action@v18
   with:
@@ -187,30 +166,10 @@ See `configs/.markdownlint.yaml` for inline comments explaining each rule.
     globs: '**/*.md'
 ```
 
-#### Commit Lint (`commitlint.config.js`)
+### `commitlint.config.js`
 
-Enforces conventional commit message format.
+Enforces conventional commit format on PR titles. Reference it in workflows:
 
-**Allowed Types:**
-- `feat`: New feature (triggers minor version bump)
-- `fix`: Bug fix (triggers patch version bump)
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, semicolons, etc.)
-- `refactor`: Code refactoring
-- `perf`: Performance improvements (triggers patch version bump)
-- `test`: Test additions or modifications
-- `chore`: Build process or auxiliary tool changes
-- `revert`: Revert previous commit
-
-**Format:** `<type>(<scope>): <subject>`
-
-**Examples:**
-- `feat(auth): add OAuth login`
-- `fix(rewards): calculate correct CO2 savings`
-- `perf(database): optimize trip query`
-- `docs(readme): update deployment instructions`
-
-**Usage in Workflows:**
 ```yaml
 - run: |
     npm install -g @commitlint/cli @commitlint/config-conventional
@@ -218,87 +177,18 @@ Enforces conventional commit message format.
       --config https://raw.githubusercontent.com/HERO2-ORG/infrastructure/main/configs/commitlint.config.js
 ```
 
-### Private Repository Access
+### `lychee.toml`
 
-All HERO2 organization repositories automatically have access to these reusable actions via `GITHUB_TOKEN`. No additional permissions configuration is required.
+Link checker configuration shared across repositories. Excludes localhost URLs.
 
-When a workflow runs in any HERO2 private repository, the default `GITHUB_TOKEN` has read access to other private repositories in the same organization, allowing seamless use of composite actions.
-
-### Repository Structure
-
-```
-infrastructure/
-├── .github/
-│   └── actions/                      # Reusable composite actions
-│       ├── docker-build-push/
-│       ├── ssh-deploy/
-│       ├── health-check/
-│       ├── semantic-release-node/
-│       ├── semantic-release-flutter/
-│       └── lighthouse-check/
-├── configs/                          # Shared configurations
-│   ├── .releaserc.base.json
-│   ├── .markdownlint.yaml
-│   └── commitlint.config.js
-├── certs/                            # iOS certificates
-├── profiles/                         # iOS provisioning profiles
-└── README.md                         # This file
+```yaml
+- uses: lycheeverse/lychee-action@v2
+  with:
+    args: --config https://raw.githubusercontent.com/HERO2-ORG/infrastructure/main/configs/lychee.toml
 ```
 
 ---
 
-## [fastlane match](https://docs.fastlane.tools/actions/match/)
+## Private Repository Access
 
-This repository contains all your certificates and provisioning profiles needed to build and sign your applications. They are encrypted using OpenSSL via a passphrase.
-
-**Important:** Make sure this repository is set to private and only your team members have access to this repo.
-
-### Installation
-
-Make sure you have the latest version of the Xcode command line tools installed:
-
-```
-xcode-select --install
-```
-
-Install _fastlane_ using bundler by following instructions here on [fastlane docs](https://docs.fastlane.tools).
-
-or alternatively using
-
-`brew install fastlane`
-
-### Usage
-
-Navigate to your project folder and run
-
-```
-fastlane match appstore
-```
-
-```
-fastlane match adhoc
-```
-
-```
-fastlane match development
-```
-
-```
-fastlane match enterprise
-```
-
-For more information open [fastlane match git repo](https://docs.fastlane.tools/actions/match/)
-
-### Content
-
-#### certs
-
-This directory contains all your certificates with their private keys
-
-#### profiles
-
-This directory contains all provisioning profiles
-
----
-
-For more information open [fastlane match git repo](https://docs.fastlane.tools/actions/match/)
+All HERO2 organization repositories automatically have read access to this repository via the default `GITHUB_TOKEN` — no additional permissions configuration required.
