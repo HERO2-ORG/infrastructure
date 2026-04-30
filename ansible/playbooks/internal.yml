@@ -1,0 +1,10 @@
+- name: Configure internal tooling VM
+  hosts: internal
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+    - ../group_vars/internal.yml
+  roles:
+    - docker
+    - ufw
+    - monitoring-server

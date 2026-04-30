@@ -1,0 +1,22 @@
+route:
+  group_by:
+    - env
+    - alertname
+    - instance
+  group_wait: 30s
+  group_interval: 10m
+  repeat_interval: 12h
+  receiver: drop
+  routes:
+    - receiver: slack-alerts
+      matchers:
+        - severity="critical"
+
+receivers:
+  - name: drop
+  - name: slack-alerts
+    slack_configs:
+      - api_url: "{{ monitoring_slack_webhook_url }}"
+        channel: "{{ monitoring_slack_channel }}"
+        username: Hero2 Monitoring
+        send_resolved: false

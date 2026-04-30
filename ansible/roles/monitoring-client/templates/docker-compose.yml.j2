@@ -1,0 +1,24 @@
+services:
+  node-exporter:
+    image: {{ node_exporter_image | default('prom/node-exporter:latest') }}
+    command:
+      - --path.rootfs=/host
+    ports:
+      - "{{ monitoring_node_exporter_port }}:9100"
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  cadvisor:
+    image: {{ cadvisor_image | default('gcr.io/cadvisor/cadvisor:latest') }}
+    ports:
+      - "{{ monitoring_cadvisor_port }}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    restart: unless-stopped

@@ -1,0 +1,42 @@
+- name: Ensure monitoring server stack directory exists
+  ansible.builtin.file:
+    path: "{{ monitoring_server_stack_path }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Ensure internal edge network exists
+  community.docker.docker_network:
+    name: "{{ internal_edge_network }}"
+    state: present
+
+- name: Write monitoring server files
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ monitoring_server_stack_path }}/{{ item.dest }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - src: docker-compose.yml.j2
+      dest: docker-compose.yml
+    - src: prometheus.yml.j2
+      dest: prometheus.yml
+    - src: alertmanager.yml.j2
+      dest: alertmanager.yml
+      mode: "0600"
+    - src: blackbox.yml.j2
+      dest: blackbox.yml
+    - src: alert-rules.yml.j2
+      dest: alert-rules.yml
+    - src: grafana-datasources.yml.j2
+      dest: grafana-datasources.yml
+  no_log: "{{ item.dest == 'alertmanager.yml' }}"
+
+- name: Start monitoring server stack (apply mode only)
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_server_stack_path }}"
+    state: present
+    pull: always
+  when: not ansible_check_mode

@@ -1,0 +1,25 @@
+deploy_user: deploy
+ansible_user: "{{ deploy_user }}"
+stack_base_path: /srv/stack
+data_base_path: /srv/data
+
+ssh_port: 22
+public_http_ports:
+  - 80
+  - 443
+
+monitoring_node_exporter_port: 9100
+monitoring_cadvisor_port: 8080
+
+docker_apt_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - docker.io
+docker_compose_version: v2.29.7
+docker_compose_arch: "{{ 'x86_64' if ansible_facts.architecture == 'x86_64' else ansible_facts.architecture }}"
+docker_compose_plugin_dir: /usr/local/lib/docker/cli-plugins
+docker_compose_plugin_path: "{{ docker_compose_plugin_dir }}/docker-compose"
+
+obsolete_root_paths:
+  - /root/.openclaw

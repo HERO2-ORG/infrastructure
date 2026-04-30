@@ -1,0 +1,86 @@
+groups:
+  - name: host_health
+    rules:
+      - alert: ServerDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server is down"
+{% raw %}
+          description: "Prometheus cannot reach {{ $labels.instance }}."
+{% endraw %}
+
+      - alert: DiskUsageCritical
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs",mountpoint=~"/|/srv.*"} / node_filesystem_size_bytes{fstype!="tmpfs",mountpoint=~"/|/srv.*"})) * 100 > 90
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 90%"
+{% raw %}
+          description: "{{ $labels.mountpoint }} at {{ $value | humanize }}% on {{ $labels.instance }}."
+{% endraw %}
+
+      - alert: DiskWillFillSoon
+        expr: predict_linear(node_filesystem_avail_bytes{fstype!="tmpfs",mountpoint=~"/|/srv.*"}[6h], 24 * 3600) < 0
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk likely to fill within 24 hours"
+{% raw %}
+          description: "{{ $labels.mountpoint }} on {{ $labels.instance }} is trending to full within 24 hours."
+{% endraw %}
+
+      - alert: MemoryExhaustionCritical
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 5
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Memory almost exhausted"
+{% raw %}
+          description: "Available memory below 5% on {{ $labels.instance }}."
+{% endraw %}
+
+      - alert: HostSaturationCritical
+        expr: |
+          (
+            node_load15 / on(instance) count by (instance) (node_cpu_seconds_total{mode="idle"}) > 1.5
+          )
+          and on(instance)
+          (
+            100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+          )
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host is saturated"
+{% raw %}
+          description: "CPU usage above 90% and 15-minute load above 1.5x CPU cores on {{ $labels.instance }}."
+{% endraw %}
+
+      - alert: PublicEndpointDown
+        expr: probe_success{job=~"blackbox_.*"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Public endpoint is down"
+{% raw %}
+          description: "{{ $labels.service }} endpoint {{ $labels.instance }} is failing from internal monitoring."
+{% endraw %}
+
+      - alert: TlsCertificateRenewalFailing
+        expr: (probe_ssl_earliest_cert_expiry{job=~"blackbox_.*"} - time()) < 7 * 24 * 3600
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS certificate auto-renewal is failing"
+{% raw %}
+          description: "{{ $labels.instance }} TLS certificate expires in less than 7 days. Traefik should renew automatically, so DNS, HTTP-01 reachability, Traefik, and ACME storage need investigation."
+{% endraw %}

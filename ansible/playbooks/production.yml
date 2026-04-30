@@ -1,0 +1,11 @@
+- name: Configure production app VM
+  hosts: production
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+    - ../group_vars/app_vms.yml
+    - ../group_vars/production.yml
+  roles:
+    - docker
+    - ufw
+    - monitoring-client

@@ -1,0 +1,11 @@
+- name: Configure staging app VM
+  hosts: staging
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+    - ../group_vars/app_vms.yml
+    - ../group_vars/staging.yml
+  roles:
+    - docker
+    - ufw
+    - monitoring-client

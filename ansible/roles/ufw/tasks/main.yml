@@ -1,0 +1,44 @@
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    update_cache: true
+
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    port: "{{ ssh_port }}"
+    proto: tcp
+
+- name: Allow public HTTP ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ public_http_ports }}"
+
+- name: Allow app metrics only from internal VM
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ groups.internal[0] }}"
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "{{ monitoring_node_exporter_port }}"
+    - "{{ monitoring_cadvisor_port }}"
+  when: inventory_hostname in groups.app_vms
+
+- name: Deny public app metrics
+  community.general.ufw:
+    rule: deny
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "{{ monitoring_node_exporter_port }}"
+    - "{{ monitoring_cadvisor_port }}"
+  when: inventory_hostname in groups.app_vms
+
+- name: Enable ufw
+  community.general.ufw:
+    state: enabled
+    policy: deny

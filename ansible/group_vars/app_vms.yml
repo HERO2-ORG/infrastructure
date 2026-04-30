@@ -1,0 +1,1 @@
+monitoring_client_stack_path: "{{ stack_base_path }}/monitoring-client"

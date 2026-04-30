@@ -1,0 +1,63 @@
+name: Ansible Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - internal
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ansible
+          ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_key
+          chmod 600 ~/.ssh/ansible_key
+          ssh-keyscan -H 62.146.168.92 194.163.167.168 157.173.100.1 >> ~/.ssh/known_hosts
+
+      - name: Deploy internal
+        if: github.event_name == 'push' || inputs.environment == 'all' || inputs.environment == 'internal'
+        working-directory: ansible
+        env:
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
+          MONITORING_SLACK_CHANNEL: ${{ vars.MONITORING_SLACK_CHANNEL }}
+          LETSENCRYPT_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
+        run: ansible-playbook playbooks/internal.yml --private-key ~/.ssh/ansible_key
+
+      - name: Deploy staging
+        if: github.event_name == 'push' || inputs.environment == 'all' || inputs.environment == 'staging'
+        working-directory: ansible
+        run: ansible-playbook playbooks/staging.yml --private-key ~/.ssh/ansible_key
+
+      - name: Check production
+        if: github.event_name == 'push' || inputs.environment == 'all' || inputs.environment == 'production'
+        working-directory: ansible
+        run: ansible-playbook playbooks/production.yml --check --private-key ~/.ssh/ansible_key
+
+      - name: Deploy production
+        if: github.event_name == 'push' || inputs.environment == 'all' || inputs.environment == 'production'
+        working-directory: ansible
+        run: ansible-playbook playbooks/production.yml --private-key ~/.ssh/ansible_key

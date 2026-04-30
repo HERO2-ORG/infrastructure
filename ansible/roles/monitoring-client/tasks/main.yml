@@ -1,0 +1,22 @@
+- name: Ensure monitoring client stack directory exists
+  ansible.builtin.file:
+    path: "{{ monitoring_client_stack_path }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Write monitoring client compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ monitoring_client_stack_path }}/docker-compose.yml"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+
+- name: Start monitoring client stack (apply mode only)
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_client_stack_path }}"
+    state: present
+    pull: always
+  when: not ansible_check_mode

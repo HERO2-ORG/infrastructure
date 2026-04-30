@@ -10,3 +10,6 @@
 # Certificate directories
 certs/
 profiles/
+
+# Local Ansible machine config
+ansible/inventory/local.yml

@@ -1,0 +1,99 @@
+networks:
+  edge:
+    external: true
+    name: {{ internal_edge_network }}
+
+services:
+  reverse-proxy:
+    image: {{ traefik_image }}
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.letsencrypt.acme.email={{ letsencrypt_email }}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - edge
+    restart: unless-stopped
+
+  prometheus:
+    image: {{ prometheus_image }}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - ./volumes/prometheus:/prometheus
+    restart: unless-stopped
+
+  alertmanager:
+    image: {{ alertmanager_image }}
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./volumes/alertmanager:/alertmanager
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: {{ blackbox_exporter_image }}
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: {{ grafana_image }}
+    environment:
+      GF_SECURITY_ADMIN_USER: {{ grafana_admin_user | quote }}
+      GF_SECURITY_ADMIN_PASSWORD: {{ grafana_admin_password | quote }}
+      GF_SERVER_ROOT_URL: https://{{ grafana_domain }}
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.grafana.rule: Host(`{{ grafana_domain }}`)
+      traefik.http.routers.grafana.entrypoints: websecure
+      traefik.http.routers.grafana.tls.certresolver: letsencrypt
+      traefik.http.services.grafana.loadbalancer.server.port: "3000"
+    volumes:
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./volumes/grafana:/var/lib/grafana
+    networks:
+      - default
+      - edge
+    restart: unless-stopped
+
+  node-exporter:
+    image: {{ node_exporter_image }}
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  cadvisor:
+    image: {{ cadvisor_image }}
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    restart: unless-stopped

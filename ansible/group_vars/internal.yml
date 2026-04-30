@@ -1,0 +1,57 @@
+app_environment: internal
+public_domain: internal.hero2.org
+
+monitoring_server_stack_path: "{{ stack_base_path }}/monitoring"
+internal_edge_network: internal_edge
+
+grafana_domain: grafana.internal.hero2.org
+grafana_admin_user: admin
+grafana_admin_password: "{{ lookup('env', 'GRAFANA_ADMIN_PASSWORD') | default('', true) }}"
+monitoring_slack_webhook_url: "{{ lookup('env', 'MONITORING_SLACK_WEBHOOK_URL') | default('', true) }}"
+monitoring_slack_channel: "{{ lookup('env', 'MONITORING_SLACK_CHANNEL') | default('#alerts', true) }}"
+letsencrypt_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') | default('admin@hero2.org', true) }}"
+
+traefik_image: traefik:v3.1
+grafana_image: grafana/grafana:latest
+prometheus_image: prom/prometheus:latest
+alertmanager_image: prom/alertmanager:latest
+node_exporter_image: prom/node-exporter:latest
+cadvisor_image: gcr.io/cadvisor/cadvisor:latest
+blackbox_exporter_image: prom/blackbox-exporter:latest
+
+monitoring_http_probes:
+  - name: staging-api
+    env: staging
+    service: backend
+    target: https://api.dev.hero2.org/health
+    module: http_2xx
+  - name: production-api
+    env: production
+    service: backend
+    target: https://api.hero2.org/health
+    module: http_2xx
+  - name: staging-keycloak
+    env: staging
+    service: keycloak
+    target: https://auth.dev.hero2.org
+    module: http_2xx_3xx
+  - name: production-keycloak
+    env: production
+    service: keycloak
+    target: https://auth.hero2.org
+    module: http_2xx_3xx
+  - name: staging-website
+    env: staging
+    service: website
+    target: https://dev.hero2.org
+    module: http_2xx_3xx
+  - name: production-website
+    env: production
+    service: website
+    target: https://hero2.org
+    module: http_2xx_3xx
+  - name: labeling-tool
+    env: internal
+    service: labeling-tool
+    target: https://labeling.internal.hero2.org
+    module: http_2xx_3xx
