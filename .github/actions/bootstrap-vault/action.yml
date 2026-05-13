@@ -1,0 +1,110 @@
+name: 'Bootstrap Service Vault'
+description: 'Auto-generate missing service secrets from secrets-spec.yml, encrypt, and commit the vault back. Fails when external secrets are still missing.'
+
+inputs:
+  deploy-dir:
+    description: 'Service deploy directory containing secrets-spec.yml and (optionally) secrets.yml.enc'
+    required: false
+    default: 'deploy'
+  envs:
+    description: 'Space-separated environments to populate (e.g. "staging production"). Ignored when layout=flat.'
+    required: false
+    default: ''
+  layout:
+    description: 'Vault layout: "env" places secrets under secrets.<env>.<KEY>, "flat" places them at root <KEY>.'
+    required: false
+    default: 'env'
+  vault-password:
+    description: 'Ansible vault password (used for both decrypt and encrypt)'
+    required: true
+  commit-message:
+    description: 'Commit message when the encrypted vault is updated'
+    required: false
+    default: 'chore(deploy): bootstrap generated secrets [skip ci]'
+
+outputs:
+  changed:
+    description: 'true when the encrypted vault was updated and pushed'
+    value: ${{ steps.bootstrap.outputs.changed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Write vault password
+      shell: bash
+      env:
+        VAULT_PASSWORD: ${{ inputs.vault-password }}
+      run: |
+        umask 077
+        printf '%s' "${VAULT_PASSWORD}" > .bootstrap_vault_password
+
+    - name: Decrypt or initialize vault
+      shell: bash
+      env:
+        DEPLOY_DIR: ${{ inputs.deploy-dir }}
+      run: |
+        set -euo pipefail
+        if [ -f "${DEPLOY_DIR}/secrets.yml.enc" ]; then
+          ansible-vault decrypt "${DEPLOY_DIR}/secrets.yml.enc" \
+            --vault-password-file .bootstrap_vault_password \
+            --output "${DEPLOY_DIR}/secrets.yml"
+        else
+          printf 'secrets: {}\n' > "${DEPLOY_DIR}/secrets.yml"
+        fi
+
+    - name: Generate missing secrets
+      id: bootstrap
+      shell: bash
+      env:
+        DEPLOY_DIR: ${{ inputs.deploy-dir }}
+        ENVS: ${{ inputs.envs }}
+        LAYOUT: ${{ inputs.layout }}
+      run: |
+        python "${{ github.action_path }}/bootstrap.py" \
+          --secrets "${DEPLOY_DIR}/secrets.yml" \
+          --spec "${DEPLOY_DIR}/secrets-spec.yml" \
+          --layout "${LAYOUT}" \
+          --envs "${ENVS}"
+
+    - name: Encrypt vault when changed
+      if: steps.bootstrap.outputs.changed == 'true'
+      shell: bash
+      env:
+        DEPLOY_DIR: ${{ inputs.deploy-dir }}
+      run: |
+        set -euo pipefail
+        ansible-vault encrypt "${DEPLOY_DIR}/secrets.yml" \
+          --vault-password-file .bootstrap_vault_password \
+          --output "${DEPLOY_DIR}/secrets.yml.enc"
+
+    - name: Commit and push when changed
+      if: steps.bootstrap.outputs.changed == 'true'
+      shell: bash
+      env:
+        DEPLOY_DIR: ${{ inputs.deploy-dir }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+      run: |
+        set -euo pipefail
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add "${DEPLOY_DIR}/secrets.yml.enc"
+        git commit -m "${COMMIT_MESSAGE}"
+        git push
+
+    - name: Cleanup transient files
+      if: always()
+      shell: bash
+      env:
+        DEPLOY_DIR: ${{ inputs.deploy-dir }}
+      run: rm -f .bootstrap_vault_password "${DEPLOY_DIR}/secrets.yml"
+
+    - name: Fail when external secrets missing
+      if: steps.bootstrap.outputs.missing != ''
+      shell: bash
+      env:
+        MISSING: ${{ steps.bootstrap.outputs.missing }}
+        DEPLOY_DIR: ${{ inputs.deploy-dir }}
+      run: |
+        echo "::error::Missing external secrets in ${DEPLOY_DIR}/secrets.yml.enc: ${MISSING}"
+        echo "Add them with: ansible-vault edit ${DEPLOY_DIR}/secrets.yml.enc"
+        exit 1

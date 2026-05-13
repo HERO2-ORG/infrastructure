@@ -46,3 +46,16 @@ make apply-staging
 make check-production
 make apply-production
 ```
+
+## CI SSH Key
+
+GitHub Actions needs `ANSIBLE_SSH_PRIVATE_KEY` as a GitHub secret. This should be a dedicated CI private key for the `deploy` user.
+
+Use a separate key from your local human key:
+
+- local key: can have a passphrase and be unlocked through `ssh-agent`
+- CI key: should not have a passphrase, because GitHub Actions cannot answer the interactive SSH passphrase prompt
+
+Install the CI key's public key in `/home/deploy/.ssh/authorized_keys` on every VPS.
+
+Service repositories also use `ANSIBLE_SSH_PRIVATE_KEY` for deploys. They additionally need `ANSIBLE_VAULT_PASSWORD` for their own encrypted service vaults.
