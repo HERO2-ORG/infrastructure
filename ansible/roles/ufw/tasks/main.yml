@@ -23,9 +23,7 @@
     from_ip: "{{ groups.internal[0] }}"
     port: "{{ item }}"
     proto: tcp
-  loop:
-    - "{{ monitoring_node_exporter_port }}"
-    - "{{ monitoring_cadvisor_port }}"
+  loop: "{{ monitoring_app_metrics_ports }}"
   when: inventory_hostname in groups.app_vms
 
 - name: Deny public app metrics
@@ -33,9 +31,7 @@
     rule: deny
     port: "{{ item }}"
     proto: tcp
-  loop:
-    - "{{ monitoring_node_exporter_port }}"
-    - "{{ monitoring_cadvisor_port }}"
+  loop: "{{ monitoring_app_metrics_ports }}"
   when: inventory_hostname in groups.app_vms
 
 - name: Enable ufw

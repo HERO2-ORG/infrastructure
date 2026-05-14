@@ -10,6 +10,14 @@ public_http_ports:
 
 monitoring_node_exporter_port: 9100
 monitoring_cadvisor_port: 8080
+monitoring_redis_exporter_port: 9121
+
+# Ports the monitoring server scrapes on each app VM. ufw allows them only from
+# the internal VM; anything not in this list stays denied. Add new exporter ports here.
+monitoring_app_metrics_ports:
+  - "{{ monitoring_node_exporter_port }}"
+  - "{{ monitoring_cadvisor_port }}"
+  - "{{ monitoring_redis_exporter_port }}"
 
 docker_apt_packages:
   - ca-certificates

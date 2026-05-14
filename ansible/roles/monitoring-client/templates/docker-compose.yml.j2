@@ -1,3 +1,10 @@
+networks:
+  # External network created by the backend compose stack at /srv/stack/backend.
+  # redis-exporter joins it so it can reach the Redis container by service name.
+  backend_app:
+    external: true
+    name: {{ backend_app_network_external_name }}
+
 services:
   node-exporter:
     image: {{ node_exporter_image | default('prom/node-exporter:latest') }}
@@ -21,4 +28,30 @@ services:
       - /dev/disk/:/dev/disk:ro
     devices:
       - /dev/kmsg
+    restart: unless-stopped
+
+  # BullMQ queue-depth probe. --check-keys exposes LLEN of each `bull:<queue>:wait`
+  # LIST as redis_key_size{key="..."} — that's the metric the monitoring server's
+  # backlog alerts evaluate. We deliberately do not surface queue depth via the
+  # backend's /health (the PR #88 follow-up: a hung backend worker can't honestly
+  # report on itself; reading the queue from outside catches both producer and
+  # consumer failures with one signal).
+  #
+  # REDIS_PASSWORD is read from the backend's own .env file — single source of truth.
+  # `required: false` lets monitoring-client come up cleanly during first-time
+  # provisioning before the backend stack has ever been deployed; the exporter will
+  # fail auth and report no metrics until the next apply after the backend deploy.
+  redis-exporter:
+    image: {{ redis_exporter_image | default('oliver006/redis_exporter:v1.62.0') }}
+    command:
+      - --redis.addr=redis://redis:6379
+      - --check-keys={{ monitoring_redis_bull_wait_keys | join(',') }}
+    env_file:
+      - path: {{ backend_env_file_path }}
+        required: false
+    ports:
+      - "{{ monitoring_redis_exporter_port }}:9121"
+    networks:
+      - default
+      - backend_app
     restart: unless-stopped

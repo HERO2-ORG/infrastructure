@@ -1,1 +1,21 @@
 monitoring_client_stack_path: "{{ stack_base_path }}/monitoring-client"
+
+# Backend-stack details that monitoring-client wires into. Compose v2 names networks
+# `<project>_<name>`; the backend stack is deployed from /srv/stack/backend so its
+# project name is `backend`. The exporter joins that network so it can reach the
+# Redis container by service name, and reads REDIS_PASSWORD from the backend's own
+# .env file (rendered by the backend's deploy) — single source of truth, no shared
+# secret, rotation handled the moment the backend rolls.
+backend_compose_project_name: backend
+backend_app_network_external_name: "{{ backend_compose_project_name }}_app"
+backend_env_file_path: "{{ stack_base_path }}/backend/.env"
+
+# BullMQ queue depths the monitoring server alerts on. List of `bull:<queue>:wait`
+# keys — `wait` is BullMQ's pending-job LIST, so LLEN is the queue depth.
+# Backlog on either side means one half of the pipeline has stalled:
+#   sensor_processing_jobs growing → trip-inference microservice is down/slow
+#   trip_results growing            → backend's startTripResultsWorker has died
+monitoring_redis_bull_wait_keys:
+  - bull:sensor_processing_jobs:wait
+  - bull:trip_results:wait
+  - bull:sensor_compaction:wait

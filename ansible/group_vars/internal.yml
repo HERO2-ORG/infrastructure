@@ -18,6 +18,7 @@ alertmanager_image: prom/alertmanager:latest
 node_exporter_image: prom/node-exporter:latest
 cadvisor_image: gcr.io/cadvisor/cadvisor:latest
 blackbox_exporter_image: prom/blackbox-exporter:latest
+redis_exporter_image: oliver006/redis_exporter:v1.62.0
 
 monitoring_http_probes:
   - name: staging-api

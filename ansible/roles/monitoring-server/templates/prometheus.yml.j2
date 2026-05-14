@@ -47,6 +47,21 @@ scrape_configs:
         labels:
           env: internal
 
+  # redis_exporter on each app VM, configured by monitoring-client to check
+  # LLEN of bull:*:wait keys. Surfaces queue depth as redis_key_size{key="..."}.
+  - job_name: redis_bullmq
+    static_configs:
+      - targets:
+          - {{ groups.staging[0] }}:{{ monitoring_redis_exporter_port }}
+        labels:
+          env: staging
+          service: backend
+      - targets:
+          - {{ groups.production[0] }}:{{ monitoring_redis_exporter_port }}
+        labels:
+          env: production
+          service: backend
+
 {% for probe in monitoring_http_probes %}
   - job_name: blackbox_{{ probe.name }}
     metrics_path: /probe

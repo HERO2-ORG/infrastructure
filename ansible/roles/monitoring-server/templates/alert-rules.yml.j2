@@ -84,3 +84,41 @@ groups:
 {% raw %}
           description: "{{ $labels.instance }} TLS certificate expires in less than 7 days. Traefik should renew automatically, so DNS, HTTP-01 reachability, Traefik, and ACME storage need investigation."
 {% endraw %}
+
+  # Catches the failure mode the PR #88 follow-up flagged: the backend's
+  # startTripResultsWorker has died but the HTTP /health check still returns 200.
+  # The blackbox probe can't see it; only the queue can.
+  - name: bullmq_queues
+    rules:
+      - alert: TripResultsQueueBacklog
+        expr: redis_key_size{job="redis_bullmq",key="bull:trip_results:wait"} > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backend not consuming trip-inference results"
+{% raw %}
+          description: "{{ $labels.env }}: bull:trip_results:wait has {{ $value }} pending jobs. The trip-inference microservice is producing results but the backend's startTripResultsWorker is not consuming them. Check backend logs and Redis worker liveness."
+{% endraw %}
+
+      - alert: SensorProcessingQueueBacklog
+        expr: redis_key_size{job="redis_bullmq",key="bull:sensor_processing_jobs:wait"} > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trip-inference microservice not consuming sensor batches"
+{% raw %}
+          description: "{{ $labels.env }}: bull:sensor_processing_jobs:wait has {{ $value }} pending jobs. The backend is enqueueing sensor batches but the trip-inference microservice is not picking them up. Check the trip-inference deployment."
+{% endraw %}
+
+      - alert: SensorCompactionQueueBacklog
+        expr: redis_key_size{job="redis_bullmq",key="bull:sensor_compaction:wait"} > 5
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Daily sensor compaction job not running"
+{% raw %}
+          description: "{{ $labels.env }}: bull:sensor_compaction:wait has {{ $value }} pending jobs older than an hour. The scheduled compaction worker (cron 0 10 * * * UTC) is queueing jobs but the worker is not draining them. Check backend startup logs."
+{% endraw %}
