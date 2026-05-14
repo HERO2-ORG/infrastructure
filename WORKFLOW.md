@@ -4,6 +4,23 @@ Full development lifecycle across Hero2 repositories — from picking up an issu
 
 ---
 
+## 0. Branch Model
+
+Repositories use one of two layouts depending on whether they deploy through a release cycle.
+
+**Staging + production** (deployed services):
+
+- `staging` is the default branch — all feature/fix PRs merge here.
+- `production` is the release branch — promoted from `staging` on release.
+
+**Single-branch** (tooling, research, repos without a separate release cadence):
+
+- `main` is the only long-lived branch — all PRs merge here.
+
+The conventions below apply to both layouts. Where a step says "the default branch", substitute `staging` or `main` accordingly.
+
+---
+
 ## 1. Branch Naming
 
 ```
@@ -39,11 +56,11 @@ Rules:
 
 ## 2. Creating a Branch
 
-Branch from `staging` if it exists, otherwise `main`:
+Branch from the default branch:
 
 ```bash
 git fetch origin
-git checkout -b feature/rewards-widget origin/staging
+git checkout -b feature/rewards-widget origin/staging   # or origin/main for single-branch repos
 ```
 
 If your work builds on another in-progress branch, branch from that branch instead and note the dependency in your PR description.
@@ -52,11 +69,11 @@ If your work builds on another in-progress branch, branch from that branch inste
 
 ## 3. Keeping Your Branch Up to Date
 
-Always rebase, never merge:
+Always rebase onto the default branch, never merge:
 
 ```bash
 git fetch origin
-git rebase origin/staging
+git rebase origin/staging   # or origin/main
 ```
 
 Resolve conflicts commit by commit during the rebase. Do not create merge commits.
@@ -132,7 +149,15 @@ Repository-specific checks (tests, builds, type checks) are defined in each repo
 
 ## 6. Merging
 
-- Squash merge into `staging` (or `main` if staging does not exist)
+- Squash merge into the default branch
 - The squash commit message must match the PR title (conventional commits format)
 - The PR author merges once all checks pass and at least one review is approved
 - Do not merge your own PR without a review unless explicitly agreed (e.g. hotfix, docs-only change)
+
+---
+
+## 7. Releasing
+
+For staging + production repos: a release promotes the current `staging` HEAD into `production`. Hotfixes that need to bypass staging go directly to `production` and are then merged back into `staging`.
+
+Single-branch repos have no release step — `main` is the live branch.
