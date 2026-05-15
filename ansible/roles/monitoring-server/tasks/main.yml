@@ -46,6 +46,7 @@
     - src: grafana-datasources.yml.j2
       dest: grafana-datasources.yml
   no_log: "{{ item.dest == 'alertmanager.yml' }}"
+  notify: Restart monitoring stack
 
 # Container runtime UIDs from the upstream images: prom/* run as nobody (65534),
 # grafana/grafana runs as 472. Bind-mounted host dirs must be writable by these UIDs.
@@ -60,6 +61,7 @@
     - { name: prometheus, uid: "65534" }
     - { name: alertmanager, uid: "65534" }
     - { name: grafana, uid: "472" }
+  notify: Restart monitoring stack
 
 - name: Start monitoring server stack (apply mode only)
   community.docker.docker_compose_v2:

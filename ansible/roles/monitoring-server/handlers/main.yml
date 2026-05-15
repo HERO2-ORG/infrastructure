@@ -1,0 +1,9 @@
+# Triggered when config templates or volume ownership change. A full restart
+# is needed because long-running Traefik does not always pick up backend label
+# changes via the docker socket (observed: hostname renames leaving routes in
+# a stale state until the proxy is restarted).
+- name: Restart monitoring stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_server_stack_path }}"
+    state: restarted
+  when: not ansible_check_mode
