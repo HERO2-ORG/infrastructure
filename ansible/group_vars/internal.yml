@@ -4,7 +4,7 @@ public_domain: internal.hero2.org
 monitoring_server_stack_path: "{{ stack_base_path }}/monitoring"
 internal_edge_network: internal_edge
 
-grafana_domain: grafana.internal.hero2.org
+monitoring_domain: monitoring.internal.hero2.org
 grafana_admin_user: admin
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_ADMIN_PASSWORD') | default('', true) }}"
 monitoring_slack_webhook_url: "{{ lookup('env', 'MONITORING_SLACK_WEBHOOK_URL') | default('', true) }}"

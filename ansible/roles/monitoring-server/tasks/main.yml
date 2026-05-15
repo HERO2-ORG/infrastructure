@@ -1,3 +1,14 @@
+- name: Validate required monitoring secrets are set
+  ansible.builtin.assert:
+    that:
+      - monitoring_slack_webhook_url | length > 0
+      - grafana_admin_password | length > 0
+    fail_msg: |
+      Required secret env vars are empty. Set them before running this playbook:
+        MONITORING_SLACK_WEBHOOK_URL  (empty value renders an invalid alertmanager.yml)
+        GRAFANA_ADMIN_PASSWORD        (empty value leaves grafana with no admin password)
+      These are wired as GitHub Actions secrets in .github/workflows/ansible-deploy.yml.
+
 - name: Ensure monitoring server stack directory exists
   ansible.builtin.file:
     path: "{{ monitoring_server_stack_path }}"
@@ -15,8 +26,8 @@
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ monitoring_server_stack_path }}/{{ item.dest }}"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
+    owner: "{{ item.owner | default(deploy_user) }}"
+    group: "{{ item.group | default(deploy_user) }}"
     mode: "{{ item.mode | default('0644') }}"
   loop:
     - src: docker-compose.yml.j2
@@ -25,6 +36,8 @@
       dest: prometheus.yml
     - src: alertmanager.yml.j2
       dest: alertmanager.yml
+      owner: "65534"
+      group: "65534"
       mode: "0600"
     - src: blackbox.yml.j2
       dest: blackbox.yml
@@ -33,6 +46,20 @@
     - src: grafana-datasources.yml.j2
       dest: grafana-datasources.yml
   no_log: "{{ item.dest == 'alertmanager.yml' }}"
+
+# Container runtime UIDs from the upstream images: prom/* run as nobody (65534),
+# grafana/grafana runs as 472. Bind-mounted host dirs must be writable by these UIDs.
+- name: Ensure persistent volume directories are writable by their container users
+  ansible.builtin.file:
+    path: "{{ monitoring_server_stack_path }}/volumes/{{ item.name }}"
+    state: directory
+    owner: "{{ item.uid }}"
+    group: "{{ item.uid }}"
+    mode: "0755"
+  loop:
+    - { name: prometheus, uid: "65534" }
+    - { name: alertmanager, uid: "65534" }
+    - { name: grafana, uid: "472" }
 
 - name: Start monitoring server stack (apply mode only)
   community.docker.docker_compose_v2:
