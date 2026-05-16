@@ -54,5 +54,5 @@ monitoring_http_probes:
   - name: labeling-tool
     env: internal
     service: labeling-tool
-    target: https://labeling.internal.hero2.org
-    module: http_2xx_3xx
+    target: https://labeling.internal.hero2.org/ping
+    module: http_2xx
