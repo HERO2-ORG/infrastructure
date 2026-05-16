@@ -30,5 +30,6 @@ trap 'rm -f "${TMP}"' EXIT
   done
 } > "${TMP}"
 
+chmod 0644 "${TMP}"
 mv "${TMP}" "${OUTPUT}"
 trap - EXIT
