@@ -45,7 +45,19 @@
       dest: alert-rules.yml
     - src: grafana-datasources.yml.j2
       dest: grafana-datasources.yml
+    - src: grafana-dashboards.yml.j2
+      dest: grafana-dashboards.yml
   no_log: "{{ item.dest == 'alertmanager.yml' }}"
+  notify: Restart monitoring stack
+
+- name: Sync Grafana dashboard JSONs
+  ansible.builtin.copy:
+    src: dashboards/
+    dest: "{{ monitoring_server_stack_path }}/dashboards/"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+    directory_mode: "0755"
   notify: Restart monitoring stack
 
 # Container runtime UIDs from the upstream images: prom/* run as nobody (65534),

@@ -72,6 +72,8 @@ services:
       traefik.http.services.grafana.loadbalancer.server.port: "3000"
     volumes:
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./dashboards:/etc/grafana/dashboards:ro
       - ./volumes/grafana:/var/lib/grafana
     networks:
       - default
