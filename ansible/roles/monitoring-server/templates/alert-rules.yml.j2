@@ -65,7 +65,7 @@ groups:
 
       - alert: PublicEndpointDown
         expr: probe_success{job=~"blackbox_.*"} == 0
-        for: 3m
+        for: 10m
         labels:
           severity: critical
         annotations:
