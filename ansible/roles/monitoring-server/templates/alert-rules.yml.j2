@@ -48,11 +48,11 @@ groups:
       - alert: HostSaturationCritical
         expr: |
           (
-            node_load15 / on(instance) count by (instance) (node_cpu_seconds_total{mode="idle"}) > 1.5
+            node_load15 / on(instance, env) count by (instance, env) (node_cpu_seconds_total{mode="idle"}) > 1.5
           )
-          and on(instance)
+          and on(instance, env)
           (
-            100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+            100 - (avg by (instance, env) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
           )
         for: 15m
         labels:

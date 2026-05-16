@@ -19,4 +19,15 @@ receivers:
       - api_url: "{{ monitoring_slack_webhook_url }}"
         channel: "{{ monitoring_slack_channel }}"
         username: Hero2 Monitoring
-        send_resolved: false
+        send_resolved: true
+        icon_emoji: '{% raw %}{{ if eq .Status "firing" }}:rotating_light:{{ else }}:white_check_mark:{{ end }}{% endraw %}'
+        color: '{% raw %}{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}{% endraw %}'
+        title: '{% raw %}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}{{ with .CommonLabels.env }} · {{ . }}{{ end }}{% endraw %}'
+        text: |-
+          {% raw %}{{ range .Alerts -}}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{- with .Labels.service }}
+          service: `{{ . }}` · {{ end }}severity: `{{ .Labels.severity }}`
+
+          {{ end -}}{% endraw %}
