@@ -4,6 +4,7 @@
   vars_files:
     - ../group_vars/all.yml
     - ../group_vars/internal.yml
+    - ../secrets.yml.enc
   roles:
     - docker
     - ufw

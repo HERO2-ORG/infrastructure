@@ -28,7 +28,7 @@ jobs:
     if: github.event_name == 'push' || inputs.environment == 'all' || inputs.environment == 'internal'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +38,13 @@ jobs:
           python -m pip install ansible
           ansible-galaxy collection install -r ansible/requirements.yml
 
+      - name: Bootstrap service vault
+        uses: ./.github/actions/bootstrap-vault
+        with:
+          deploy-dir: ansible
+          layout: flat
+          vault-password: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
@@ -45,14 +52,20 @@ jobs:
           chmod 600 ~/.ssh/ansible_key
           ssh-keyscan -H 157.173.100.1 >> ~/.ssh/known_hosts
 
+      - name: Write vault password
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/vault_password
+
       - name: Apply internal
         working-directory: ansible
         env:
-          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
           MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
           MONITORING_SLACK_CHANNEL: ${{ vars.MONITORING_SLACK_CHANNEL }}
           LETSENCRYPT_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
-        run: ansible-playbook playbooks/internal.yml --private-key ~/.ssh/ansible_key
+        run: ansible-playbook playbooks/internal.yml --private-key ~/.ssh/ansible_key --vault-password-file vault_password
+
+      - name: Cleanup vault password
+        if: always()
+        run: rm -f ansible/vault_password
 
   deploy-staging:
     if: github.event_name == 'push' || inputs.environment == 'all' || inputs.environment == 'staging'
