@@ -1,3 +1,7 @@
+- name: Set up node-exporter textfile collector for /srv directory metrics
+  ansible.builtin.import_role:
+    name: node-exporter-textfile
+
 - name: Ensure monitoring client stack directory exists
   ansible.builtin.file:
     path: "{{ monitoring_client_stack_path }}"

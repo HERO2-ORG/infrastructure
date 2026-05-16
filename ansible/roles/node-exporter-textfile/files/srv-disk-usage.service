@@ -1,0 +1,9 @@
+[Unit]
+Description=Generate /srv directory disk usage metrics for node-exporter
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/srv-disk-usage.sh
+Nice=19
+IOSchedulingClass=idle

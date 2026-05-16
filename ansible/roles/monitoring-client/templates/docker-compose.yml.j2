@@ -10,6 +10,7 @@ services:
     image: {{ node_exporter_image | default('prom/node-exporter:latest') }}
     command:
       - --path.rootfs=/host
+      - --collector.textfile.directory=/host/var/lib/node-exporter
     ports:
       - "{{ monitoring_node_exporter_port }}:9100"
     volumes:

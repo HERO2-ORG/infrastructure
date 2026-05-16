@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "description": "Per-host CPU, memory, disk, network and load. Mirrors the host_health alerts (ServerDown, DiskUsageCritical, DiskWillFillSoon, MemoryExhaustionCritical, HostSaturationCritical). Thresholds drawn match alert firing levels.",
+  "description": "Per-host CPU, memory, disk, network and load. Mirrors the host_health alerts. Thresholds drawn match alert firing levels.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -15,7 +15,7 @@
       "panels": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "description": "1 - idle %. HostSaturationCritical fires when >90% sustained with load>1.5x cores for 15m.",
+          "description": "CPU averaged across all cores (1 - idle %). Identical reading whether all cores are at 60% or some are 100% and others idle — use the 'Max core' panel next to it to distinguish.",
           "fieldConfig": {
             "defaults": {
               "color": { "mode": "thresholds" },
@@ -33,7 +33,7 @@
             },
             "overrides": []
           },
-          "gridPos": { "h": 7, "w": 6, "x": 0, "y": 1 },
+          "gridPos": { "h": 7, "w": 4, "x": 0, "y": 1 },
           "id": 1,
           "options": {
             "orientation": "auto",
@@ -47,11 +47,52 @@
               "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "100 - (avg by (env) (rate(node_cpu_seconds_total{mode=\"idle\",env=\"$env\"}[5m])) * 100)",
               "instant": true,
-              "legendFormat": "CPU",
+              "legendFormat": "Avg",
               "refId": "A"
             }
           ],
-          "title": "CPU",
+          "title": "Avg CPU",
+          "type": "gauge"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "description": "Busiest single core (1 - max idle). If this is 100% while Avg CPU is low, one core is saturated — usually a single-threaded process pinning a core.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 80 },
+                  { "color": "red", "value": 95 }
+                ]
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 7, "w": 4, "x": 4, "y": 1 },
+          "id": 6,
+          "options": {
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true
+          },
+          "pluginVersion": "13.0.1",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "100 - (min by (env) (rate(node_cpu_seconds_total{mode=\"idle\",env=\"$env\"}[5m])) * 100)",
+              "instant": true,
+              "legendFormat": "Max core",
+              "refId": "A"
+            }
+          ],
+          "title": "Max core",
           "type": "gauge"
         },
         {
@@ -74,7 +115,7 @@
             },
             "overrides": []
           },
-          "gridPos": { "h": 7, "w": 6, "x": 6, "y": 1 },
+          "gridPos": { "h": 7, "w": 4, "x": 8, "y": 1 },
           "id": 2,
           "options": {
             "orientation": "auto",
@@ -97,15 +138,10 @@
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "description": "Per-mountpoint usage for / and /srv*. DiskUsageCritical fires above 90% for 10m; DiskWillFillSoon fires if the 6h trend predicts full within 24h.",
+          "description": "Filesystem fill % for /. DiskUsageCritical fires above 90% for 10m.",
           "fieldConfig": {
             "defaults": {
               "color": { "mode": "thresholds" },
-              "custom": {
-                "align": "auto",
-                "displayMode": "lcd-gauge",
-                "filterable": false
-              },
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -118,38 +154,80 @@
               "min": 0,
               "max": 100
             },
-            "overrides": [
-              {
-                "matcher": { "id": "byName", "options": "mountpoint" },
-                "properties": [{ "id": "custom.displayMode", "value": "auto" }]
-              }
-            ]
+            "overrides": []
           },
-          "gridPos": { "h": 7, "w": 12, "x": 12, "y": 1 },
+          "gridPos": { "h": 7, "w": 4, "x": 12, "y": 1 },
           "id": 3,
           "options": {
-            "cellHeight": "sm",
-            "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
-            "showHeader": true,
-            "sortBy": [{ "desc": true, "displayName": "Used %" }]
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true
           },
           "pluginVersion": "13.0.1",
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "(1 - (node_filesystem_avail_bytes{env=\"$env\",fstype!=\"tmpfs\",mountpoint=~\"/|/srv.*\"} / node_filesystem_size_bytes{env=\"$env\",fstype!=\"tmpfs\",mountpoint=~\"/|/srv.*\"})) * 100",
+              "expr": "(1 - (node_filesystem_avail_bytes{env=\"$env\",fstype!=\"tmpfs\",mountpoint=\"/\"} / node_filesystem_size_bytes{env=\"$env\",fstype!=\"tmpfs\",mountpoint=\"/\"})) * 100",
+              "instant": true,
+              "legendFormat": "/",
+              "refId": "A"
+            }
+          ],
+          "title": "Disk /",
+          "type": "gauge"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "description": "Disk usage broken down by /srv/stack/* and /srv/data/* directory plus 'other' (everything outside /srv: system, docker images, container writable layers). Powered by the node-exporter textfile collector. Refreshes every 5 minutes.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "custom": {
+                "align": "auto",
+                "displayMode": "lcd-gauge",
+                "filterable": false
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "blue", "value": null }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Directory" },
+                "properties": [{ "id": "custom.displayMode", "value": "auto" }]
+              }
+            ]
+          },
+          "gridPos": { "h": 7, "w": 8, "x": 16, "y": 1 },
+          "id": 7,
+          "options": {
+            "cellHeight": "sm",
+            "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+            "showHeader": true,
+            "sortBy": [{ "desc": true, "displayName": "Size" }]
+          },
+          "pluginVersion": "13.0.1",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "srv_directory_used_bytes{env=\"$env\"} or label_replace((node_filesystem_size_bytes{env=\"$env\",mountpoint=\"/\",fstype!=\"tmpfs\"} - node_filesystem_avail_bytes{env=\"$env\",mountpoint=\"/\",fstype!=\"tmpfs\"} - on() (sum(srv_directory_used_bytes{env=\"$env\"}) or on() vector(0))), \"name\", \"other\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "refId": "A"
             }
           ],
-          "title": "Disk usage",
+          "title": "Disk breakdown",
           "transformations": [
             {
               "id": "organize",
               "options": {
-                "excludeByName": { "Time": true, "__name__": true, "job": true, "env": true, "instance": true, "fstype": true, "device": true },
-                "renameByName": { "mountpoint": "Mount", "Value": "Used %" }
+                "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true, "env": true, "path": true, "mountpoint": true, "fstype": true, "device": true, "category": true },
+                "renameByName": { "name": "Directory", "Value": "Size" }
               }
             }
           ],
@@ -157,7 +235,46 @@
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "description": "Per-interface RX/TX. No alert; useful for correlating with latency or saturation.",
+          "description": "CPU usage broken down by what the kernel was doing: user (your apps), system (kernel/syscalls), iowait (blocked on disk/net), steal (hypervisor took your cycles). Useful for diagnosing why CPU is high.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 30,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": { "mode": "normal", "group": "A" }
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 },
+          "id": 8,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "pluginVersion": "13.0.1",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "avg by (mode) (rate(node_cpu_seconds_total{env=\"$env\",mode!=\"idle\"}[5m])) * 100",
+              "legendFormat": "{{mode}}",
+              "refId": "A"
+            }
+          ],
+          "title": "CPU by mode",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "description": "Per-interface RX/TX (bytes/sec). No alert; host-level signal for correlating with latency or saturation. Request-rate metrics belong in a service dashboard.",
           "fieldConfig": {
             "defaults": {
               "color": { "mode": "palette-classic" },
@@ -178,7 +295,7 @@
               }
             ]
           },
-          "gridPos": { "h": 7, "w": 12, "x": 0, "y": 8 },
+          "gridPos": { "h": 7, "w": 8, "x": 8, "y": 8 },
           "id": 4,
           "options": {
             "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
@@ -204,7 +321,7 @@
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "description": "load1/5/15 versus 1.5x CPU count. HostSaturationCritical fires when load15/cores > 1.5 with CPU >90% for 15m.",
+          "description": "Number of processes either running on a CPU or waiting (for CPU or for blocking I/O) over 1/5/15-minute windows. Below the dashed red line (1.5× cores) the host has slack. Sustained above means processes are queueing for CPU or blocked on I/O. HostSaturationCritical fires when load15 exceeds the red line AND CPU >90% for 15m.",
           "fieldConfig": {
             "defaults": {
               "color": { "mode": "palette-classic" },
@@ -227,7 +344,7 @@
               }
             ]
           },
-          "gridPos": { "h": 7, "w": 12, "x": 12, "y": 8 },
+          "gridPos": { "h": 7, "w": 8, "x": 16, "y": 8 },
           "id": 5,
           "options": {
             "legend": { "calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -260,7 +377,7 @@
               "refId": "D"
             }
           ],
-          "title": "Load average",
+          "title": "Load (running + waiting processes)",
           "type": "timeseries"
         }
       ],
@@ -304,6 +421,6 @@
   "timezone": "browser",
   "title": "Hosts",
   "uid": "hosts",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

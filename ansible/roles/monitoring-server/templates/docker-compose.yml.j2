@@ -84,6 +84,7 @@ services:
     image: {{ node_exporter_image }}
     command:
       - --path.rootfs=/host
+      - --collector.textfile.directory=/host/var/lib/node-exporter
     volumes:
       - /:/host:ro,rslave
     restart: unless-stopped

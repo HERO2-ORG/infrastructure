@@ -1,0 +1,35 @@
+# Surfaces per-directory disk usage under /srv as Prometheus metrics. node-exporter
+# only reports per-filesystem stats, but on these VMs /srv is just a directory on /,
+# so we use the textfile collector to emit srv_directory_used_bytes{category,name}
+# from a systemd-timer-driven du. Used by the Hosts dashboard.
+- name: Ensure node-exporter textfile collector directory exists
+  ansible.builtin.file:
+    path: /var/lib/node-exporter
+    state: directory
+    mode: "0755"
+
+- name: Install /srv disk usage exporter script
+  ansible.builtin.copy:
+    src: srv-disk-usage.sh
+    dest: /usr/local/bin/srv-disk-usage.sh
+    mode: "0755"
+
+- name: Install /srv disk usage systemd units
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - srv-disk-usage.service
+    - srv-disk-usage.timer
+
+- name: Enable and start /srv disk usage timer
+  ansible.builtin.systemd:
+    name: srv-disk-usage.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Generate initial /srv disk usage metrics so they exist before the first timer tick
+  ansible.builtin.command: /usr/local/bin/srv-disk-usage.sh
+  changed_when: false

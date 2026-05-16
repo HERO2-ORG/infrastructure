@@ -1,3 +1,7 @@
+- name: Set up node-exporter textfile collector for /srv directory metrics
+  ansible.builtin.import_role:
+    name: node-exporter-textfile
+
 - name: Validate required external monitoring secret is set
   ansible.builtin.assert:
     that:
