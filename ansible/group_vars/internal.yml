@@ -14,8 +14,6 @@ letsencrypt_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') | default('admin@hero2
 
 # IPs of app VMs that push logs to Loki — UFW allows port 3100 from these only
 loki_inbound_sources: "{{ groups['staging'] + groups['production'] }}"
-
-traefik_image: traefik:v3.1
 traefik_image: traefik:v3.6.1
 grafana_image: grafana/grafana:13.0.1
 prometheus_image: prom/prometheus:v3.11.3
