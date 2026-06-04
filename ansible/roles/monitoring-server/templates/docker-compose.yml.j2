@@ -58,6 +58,16 @@ services:
       - ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     restart: unless-stopped
 
+  loki:
+    image: {{ loki_image }}
+    command: -config.file=/etc/loki/loki.yml
+    ports:
+      - "{{ loki_port }}:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/loki.yml:ro
+      - ./volumes/loki:/loki
+    restart: unless-stopped
+
   grafana:
     image: {{ grafana_image }}
     environment:
@@ -73,6 +83,7 @@ services:
     volumes:
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./grafana-alerting:/etc/grafana/provisioning/alerting:ro
       - ./dashboards:/etc/grafana/dashboards:ro
       - ./volumes/grafana:/var/lib/grafana
     networks:

@@ -1,0 +1,121 @@
+apiVersion: 1
+
+# Routes all Grafana-managed alerts to the existing Alertmanager, which already
+# handles Slack routing for severity=critical. No changes to alertmanager.yml needed.
+contactPoints:
+  - orgId: 1
+    name: alertmanager
+    receivers:
+      - uid: alertmanager-receiver
+        type: prometheus-alertmanager
+        settings:
+          url: http://alertmanager:9093
+
+policies:
+  - orgId: 1
+    receiver: alertmanager
+    group_by: [alertname, errorType, env]
+    group_wait: 30s
+    group_interval: 10m
+    repeat_interval: 1h
+
+groups:
+  - orgId: 1
+    name: error-monitoring
+    folder: Error Monitoring
+    interval: 5m
+    rules:
+      # Fires when a single error type exceeds 10 occurrences in one hour.
+      - uid: error-spike
+        title: Error spike
+        condition: D
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: loki
+            model:
+              editorMode: code
+              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production"} | json level, errorType | level = "error" | errorType != "" [1h]))'
+              queryType: instant
+              refId: A
+          - refId: D
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    params: [10]
+                    type: gt
+                  query:
+                    params: [A]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "Error spike: {{ $labels.errorType }}"
+          description: "{{ $values.A }} occurrences in the last hour on {{ $labels.env }}"
+        labels:
+          severity: critical
+
+      # Fires when an error type is seen for the first time (all 24h occurrences
+      # happened in the last hour, meaning it surfaced within the last hour).
+      - uid: new-error-type
+        title: New error type
+        condition: E
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: loki
+            model:
+              editorMode: code
+              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production"} | json level, errorType | level = "error" | errorType != "" [1h]))'
+              queryType: instant
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 86400
+              to: 0
+            datasourceUid: loki
+            model:
+              editorMode: code
+              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production"} | json level, errorType | level = "error" | errorType != "" [24h]))'
+              queryType: instant
+              refId: B
+          # ($A > 0) * ($B == $A): 1 when errors exist AND all 24h occurrences are
+          # from the last hour (i.e. this error type first appeared within the last hour)
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: math
+              expression: "($A > 0) * ($B == $A)"
+              refId: C
+          - refId: E
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  query:
+                    params: [C]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "New error type: {{ $labels.errorType }}"
+          description: "First occurrence detected on {{ $labels.env }}"
+        labels:
+          severity: critical
