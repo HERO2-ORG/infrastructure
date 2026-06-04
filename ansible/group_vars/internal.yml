@@ -7,6 +7,7 @@ internal_edge_network: internal_edge
 monitoring_domain: monitoring.internal.hero2.org
 grafana_admin_user: admin
 grafana_admin_password: "{{ GRAFANA_ADMIN_PASSWORD }}"
+
 monitoring_slack_webhook_url: "{{ lookup('env', 'MONITORING_SLACK_WEBHOOK_URL') | default('', true) }}"
 monitoring_slack_channel: "{{ lookup('env', 'MONITORING_SLACK_CHANNEL') | default('#alerts', true) }}"
 letsencrypt_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') | default('admin@hero2.org', true) }}"
@@ -15,6 +16,7 @@ letsencrypt_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') | default('admin@hero2
 loki_inbound_sources: "{{ groups['staging'] + groups['production'] }}"
 
 traefik_image: traefik:v3.1
+traefik_image: traefik:v3.6.1
 grafana_image: grafana/grafana:13.0.1
 prometheus_image: prom/prometheus:v3.11.3
 alertmanager_image: prom/alertmanager:v0.32.1
@@ -59,3 +61,8 @@ monitoring_http_probes:
     service: labeling-tool
     target: https://labeling.internal.hero2.org/ping
     module: http_2xx
+  - name: internal-system
+    env: internal
+    service: internal-system
+    target: https://internal.hero2.org/api/health
+    module: http_2xx_3xx

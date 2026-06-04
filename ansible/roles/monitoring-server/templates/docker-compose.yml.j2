@@ -80,6 +80,9 @@ services:
       traefik.http.routers.grafana.entrypoints: websecure
       traefik.http.routers.grafana.tls.certresolver: letsencrypt
       traefik.http.services.grafana.loadbalancer.server.port: "3000"
+      # grafana is multi-homed (default + edge); pin the network traefik routes
+      # over, else it may pick the default-network IP it cannot reach.
+      traefik.docker.network: {{ internal_edge_network }}
     volumes:
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
