@@ -10,13 +10,18 @@
     group: "{{ deploy_user }}"
     mode: "0755"
 
-- name: Write monitoring client compose file
+- name: Write monitoring client files
   ansible.builtin.template:
-    src: docker-compose.yml.j2
-    dest: "{{ monitoring_client_stack_path }}/docker-compose.yml"
+    src: "{{ item.src }}"
+    dest: "{{ monitoring_client_stack_path }}/{{ item.dest }}"
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: "0644"
+  loop:
+    - src: docker-compose.yml.j2
+      dest: docker-compose.yml
+    - src: alloy-config.alloy.j2
+      dest: alloy-config.alloy
 
 - name: Start monitoring client stack (apply mode only)
   community.docker.docker_compose_v2:

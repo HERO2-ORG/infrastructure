@@ -58,6 +58,28 @@ services:
       - ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     restart: unless-stopped
 
+  loki:
+    image: {{ loki_image }}
+    command: -config.file=/etc/loki/loki.yml
+    labels:
+      traefik.enable: "true"
+      # Only the push API is exposed externally (TLS + basic auth). The query API stays
+      # on the internal default network for Grafana; it is never published.
+      traefik.http.routers.loki-push.rule: Host(`{{ loki_domain }}`) && PathPrefix(`/loki/api/v1/push`)
+      traefik.http.routers.loki-push.entrypoints: websecure
+      traefik.http.routers.loki-push.tls.certresolver: letsencrypt
+      traefik.http.routers.loki-push.middlewares: loki-auth
+      traefik.http.middlewares.loki-auth.basicauth.users: "{{ loki_basic_auth_htpasswd | replace('$', '$$') }}"
+      traefik.http.services.loki-push.loadbalancer.server.port: "{{ loki_port }}"
+      traefik.docker.network: {{ internal_edge_network }}
+    volumes:
+      - ./loki-config.yml:/etc/loki/loki.yml:ro
+      - ./volumes/loki:/loki
+    networks:
+      - default
+      - edge
+    restart: unless-stopped
+
   grafana:
     image: {{ grafana_image }}
     environment:
@@ -76,6 +98,7 @@ services:
     volumes:
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./grafana-alerting:/etc/grafana/provisioning/alerting:ro
       - ./dashboards:/etc/grafana/dashboards:ro
       - ./volumes/grafana:/var/lib/grafana
     networks:

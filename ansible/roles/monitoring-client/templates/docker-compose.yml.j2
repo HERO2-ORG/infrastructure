@@ -31,6 +31,18 @@ services:
       - /dev/kmsg
     restart: unless-stopped
 
+  # Tails Docker container stdout/stderr and ships structured JSON logs to Loki
+  # on the internal VM. Uses Docker SD discovery so new containers are picked up
+  # automatically without an Alloy restart.
+  alloy:
+    image: {{ alloy_image }}
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/tmp/alloy /etc/alloy/config.alloy
+    volumes:
+      - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/alloy:/tmp/alloy
+    restart: unless-stopped
+
   # BullMQ queue-depth probe. --check-keys exposes LLEN of each `bull:<queue>:wait`
   # LIST as redis_key_size{key="..."} — that's the metric the monitoring server's
   # backlog alerts evaluate. We deliberately do not surface queue depth via the

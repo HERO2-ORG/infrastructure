@@ -51,6 +51,8 @@
       dest: grafana-datasources.yml
     - src: grafana-dashboards.yml.j2
       dest: grafana-dashboards.yml
+    - src: loki-config.yml.j2
+      dest: loki-config.yml
   no_log: "{{ item.dest == 'alertmanager.yml' }}"
   notify: Restart monitoring stack
 
@@ -64,8 +66,19 @@
     directory_mode: "0755"
   notify: Restart monitoring stack
 
+- name: Sync Grafana alerting provisioning files
+  ansible.builtin.copy:
+    src: grafana-alerting/
+    dest: "{{ monitoring_server_stack_path }}/grafana-alerting/"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+    directory_mode: "0755"
+  notify: Restart monitoring stack
+
 # Container runtime UIDs from the upstream images: prom/* run as nobody (65534),
-# grafana/grafana runs as 472. Bind-mounted host dirs must be writable by these UIDs.
+# grafana/grafana runs as 472, loki runs as 10001.
+# Bind-mounted host dirs must be writable by these UIDs.
 - name: Ensure persistent volume directories are writable by their container users
   ansible.builtin.file:
     path: "{{ monitoring_server_stack_path }}/volumes/{{ item.name }}"
@@ -77,6 +90,7 @@
     - { name: prometheus, uid: "65534" }
     - { name: alertmanager, uid: "65534" }
     - { name: grafana, uid: "472" }
+    - { name: loki, uid: "10001" }
   notify: Restart monitoring stack
 
 - name: Start monitoring server stack (apply mode only)

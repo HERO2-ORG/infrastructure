@@ -12,6 +12,9 @@ monitoring_slack_webhook_url: "{{ lookup('env', 'MONITORING_SLACK_WEBHOOK_URL') 
 monitoring_slack_channel: "{{ lookup('env', 'MONITORING_SLACK_CHANNEL') | default('#alerts', true) }}"
 letsencrypt_email: "{{ lookup('env', 'LETSENCRYPT_EMAIL') | default('admin@hero2.org', true) }}"
 
+# bcrypt htpasswd entry (user:hash) Traefik checks for Loki push. Generate with
+# `htpasswd -nbB {{ loki_basic_auth_user }} <password>` and store in the vault.
+loki_basic_auth_htpasswd: "{{ LOKI_INGEST_HTPASSWD }}"
 traefik_image: traefik:v3.6.1
 grafana_image: grafana/grafana:13.0.1
 prometheus_image: prom/prometheus:v3.11.3

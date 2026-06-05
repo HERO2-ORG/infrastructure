@@ -1,0 +1,88 @@
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "1s"
+
+  filter {
+    name   = "status"
+    values = ["running"]
+  }
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/?(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    replacement  = "{{ app_environment }}"
+    target_label = "env"
+  }
+}
+
+loki.source.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.containers.output
+  forward_to       = [loki.process.pipeline.receiver]
+  refresh_interval = "1s"
+}
+
+loki.process "pipeline" {
+  forward_to = [loki.write.loki.receiver]
+
+  // Docker wraps each log line: {"log":"<payload>","stream":"stdout","time":"<ts>"}
+  stage.json {
+    expressions = {
+      raw_log     = "log",
+      docker_time = "time",
+    }
+  }
+
+  // Parse inner Pino JSON. Only level/source become labels (bounded cardinality).
+  // errorType is attacker-controllable free text, so it stays a query-time `| json`
+  // field (the dashboards/alerts parse it) and is never a Loki stream label.
+  // analyticsId/sessionId likewise stay as parsed fields only — never labels.
+  stage.json {
+    source = "raw_log"
+    expressions = {
+      level  = "level",
+      source = "source",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level  = "",
+      source = "",
+    }
+  }
+
+  // Replace Docker envelope with inner Pino JSON so Grafana shows the actual message.
+  stage.output {
+    source = "raw_log"
+  }
+
+  stage.timestamp {
+    source = "docker_time"
+    format = "RFC3339Nano"
+  }
+}
+
+loki.write "loki" {
+  endpoint {
+    url = "https://{{ loki_domain }}/loki/api/v1/push"
+
+    basic_auth {
+      username = "{{ loki_basic_auth_user }}"
+      password = "{{ loki_basic_auth_password }}"
+    }
+  }
+}
