@@ -46,22 +46,22 @@ loki.process "pipeline" {
     }
   }
 
-  // Parse inner Pino JSON. level/source/errorType become labels (bounded cardinality).
-  // analyticsId/sessionId stay as parsed fields only — never labels.
+  // Parse inner Pino JSON. Only level/source become labels (bounded cardinality).
+  // errorType is attacker-controllable free text, so it stays a query-time `| json`
+  // field (the dashboards/alerts parse it) and is never a Loki stream label.
+  // analyticsId/sessionId likewise stay as parsed fields only — never labels.
   stage.json {
     source = "raw_log"
     expressions = {
-      level     = "level",
-      source    = "source",
-      errorType = "errorType",
+      level  = "level",
+      source = "source",
     }
   }
 
   stage.labels {
     values = {
-      level     = "",
-      source    = "",
-      errorType = "",
+      level  = "",
+      source = "",
     }
   }
 
@@ -78,6 +78,11 @@ loki.process "pipeline" {
 
 loki.write "loki" {
   endpoint {
-    url = "http://{{ groups['internal'][0] }}:{{ loki_port }}/loki/api/v1/push"
+    url = "https://{{ loki_domain }}/loki/api/v1/push"
+
+    basic_auth {
+      username = "{{ loki_basic_auth_user }}"
+      password = "{{ loki_basic_auth_password }}"
+    }
   }
 }

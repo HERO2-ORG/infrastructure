@@ -23,6 +23,12 @@ loki_port: 3100
 loki_image: grafana/loki:3.5.0
 alloy_image: grafana/alloy:v1.8.3
 
+# Alloy on each app VM pushes logs to Loki over TLS via the internal VM's Traefik,
+# authenticated with basic auth. Requires a DNS A record: loki_domain -> internal VM IP.
+loki_domain: logs.internal.hero2.org
+loki_basic_auth_user: alloy
+loki_basic_auth_password: "{{ LOKI_INGEST_PASSWORD }}"
+
 docker_apt_packages:
   - ca-certificates
   - curl

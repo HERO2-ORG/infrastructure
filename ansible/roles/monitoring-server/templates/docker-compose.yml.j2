@@ -61,11 +61,23 @@ services:
   loki:
     image: {{ loki_image }}
     command: -config.file=/etc/loki/loki.yml
-    ports:
-      - "{{ loki_port }}:3100"
+    labels:
+      traefik.enable: "true"
+      # Only the push API is exposed externally (TLS + basic auth). The query API stays
+      # on the internal default network for Grafana; it is never published.
+      traefik.http.routers.loki-push.rule: Host(`{{ loki_domain }}`) && PathPrefix(`/loki/api/v1/push`)
+      traefik.http.routers.loki-push.entrypoints: websecure
+      traefik.http.routers.loki-push.tls.certresolver: letsencrypt
+      traefik.http.routers.loki-push.middlewares: loki-auth
+      traefik.http.middlewares.loki-auth.basicauth.users: "{{ loki_basic_auth_htpasswd | replace('$', '$$') }}"
+      traefik.http.services.loki-push.loadbalancer.server.port: "{{ loki_port }}"
+      traefik.docker.network: {{ internal_edge_network }}
     volumes:
       - ./loki-config.yml:/etc/loki/loki.yml:ro
       - ./volumes/loki:/loki
+    networks:
+      - default
+      - edge
     restart: unless-stopped
 
   grafana:

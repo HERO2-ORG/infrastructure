@@ -5,6 +5,7 @@
     - ../group_vars/all.yml
     - ../group_vars/app_vms.yml
     - ../group_vars/staging.yml
+    - ../secrets.yml.enc
   roles:
     - docker
     - ufw

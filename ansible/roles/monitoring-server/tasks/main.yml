@@ -93,14 +93,6 @@
     - { name: loki, uid: "10001" }
   notify: Restart monitoring stack
 
-- name: Allow Loki ingestion port from app VMs
-  community.general.ufw:
-    rule: allow
-    port: "{{ loki_port }}"
-    proto: tcp
-    src: "{{ item }}"
-  loop: "{{ loki_inbound_sources }}"
-
 - name: Start monitoring server stack (apply mode only)
   community.docker.docker_compose_v2:
     project_src: "{{ monitoring_server_stack_path }}"
