@@ -42,14 +42,6 @@ compactor:
   # single-binary process) refuses to start.
   delete_request_store: filesystem
 
-ruler:
-  alertmanager_url: http://alertmanager:9093
-  enable_api: true
-  storage:
-    type: local
-    local:
-      directory: /loki/rules
-
 query_range:
   results_cache:
     cache:
