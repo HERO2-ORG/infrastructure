@@ -88,9 +88,16 @@ jobs:
           chmod 600 ~/.ssh/ansible_key
           ssh-keyscan -H 194.163.167.168 >> ~/.ssh/known_hosts
 
+      - name: Write vault password
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/vault_password
+
       - name: Apply staging
         working-directory: ansible
-        run: ansible-playbook playbooks/staging.yml --private-key ~/.ssh/ansible_key
+        run: ansible-playbook playbooks/staging.yml --private-key ~/.ssh/ansible_key --vault-password-file vault_password
+
+      - name: Cleanup vault password
+        if: always()
+        run: rm -f ansible/vault_password
 
   deploy-production:
     needs: deploy-staging
@@ -117,10 +124,17 @@ jobs:
           chmod 600 ~/.ssh/ansible_key
           ssh-keyscan -H 62.146.168.92 >> ~/.ssh/known_hosts
 
+      - name: Write vault password
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/vault_password
+
       - name: Check production
         working-directory: ansible
-        run: ansible-playbook playbooks/production.yml --check --diff --private-key ~/.ssh/ansible_key
+        run: ansible-playbook playbooks/production.yml --check --diff --private-key ~/.ssh/ansible_key --vault-password-file vault_password
 
       - name: Apply production
         working-directory: ansible
-        run: ansible-playbook playbooks/production.yml --private-key ~/.ssh/ansible_key
+        run: ansible-playbook playbooks/production.yml --private-key ~/.ssh/ansible_key --vault-password-file vault_password
+
+      - name: Cleanup vault password
+        if: always()
+        run: rm -f ansible/vault_password
