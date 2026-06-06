@@ -1,0 +1,289 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "datasource", "id": "loki", "name": "Loki", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "End-to-end trip-inference latency: queue wait + parse + graph build/inference + publish, from the worker's structured inference_latency stdout line shipped via Alloy to Loki.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Total per-job time inside the worker (parse + inference + publish) for fully served jobs.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "legend": { "calcs": ["max", "mean"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.5, {env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | status=\"ok\" | unwrap total_ms [$__auto]) by (env)",
+          "legendFormat": "p50 ({{env}})",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.95, {env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | status=\"ok\" | unwrap total_ms [$__auto]) by (env)",
+          "legendFormat": "p95 ({{env}})",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "max_over_time({env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | status=\"ok\" | unwrap total_ms [$__auto]) by (env)",
+          "legendFormat": "max ({{env}})",
+          "refId": "C"
+        }
+      ],
+      "title": "End-to-end inference time (served jobs)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "p95 total_ms over the selected range for served jobs.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2000 },
+              { "color": "red", "value": 5000 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.95, {env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | status=\"ok\" | unwrap total_ms [$__range]) by (env)",
+          "legendFormat": "p95 e2e ({{env}})",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "p95 end-to-end (range)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Average time spent per pipeline phase for served jobs. infer covers graph build + model forward; see the graph-build panel for the build-only split.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 25, "stacking": { "mode": "normal", "group": "A" } },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "id": 3,
+      "options": {
+        "legend": { "calcs": ["mean"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "avg_over_time({env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | status=\"ok\" | unwrap parse_ms [$__auto])",
+          "legendFormat": "parse",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "avg_over_time({env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | status=\"ok\" | unwrap infer_ms [$__auto])",
+          "legendFormat": "infer (graph build + forward)",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "avg_over_time({env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | status=\"ok\" | unwrap publish_ms [$__auto])",
+          "legendFormat": "publish",
+          "refId": "C"
+        }
+      ],
+      "title": "Phase breakdown (avg ms, stacked)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Time a job waited on the BullMQ sensor queue between the backend enqueueing it and the worker dequeuing it. Add to total_ms for full ingestion-to-output time.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "id": 4,
+      "options": {
+        "legend": { "calcs": ["max", "mean"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.5, {env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | queue_wait_ms >= 0 | unwrap queue_wait_ms [$__auto]) by (env)",
+          "legendFormat": "p50 ({{env}})",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.95, {env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | queue_wait_ms >= 0 | unwrap queue_wait_ms [$__auto]) by (env)",
+          "legendFormat": "p95 ({{env}})",
+          "refId": "B"
+        }
+      ],
+      "title": "Queue wait (enqueue -> dequeue)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Worst-case graph build time per job from the graph_build_latency line. The cold fetch-on-miss build against the infra-tile service dominates here.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 18 },
+      "id": 5,
+      "options": {
+        "legend": { "calcs": ["max", "mean"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "max_over_time({env=~\"$env\", service=\"inference-worker\"} |= \"graph_build_latency\" | logfmt | unwrap max_ms [$__auto]) by (backend)",
+          "legendFormat": "max build ({{backend}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Graph build latency (max per job)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Job outcomes per interval. no_segments / empty / skipped_no_coverage / error are excluded from the latency percentiles above.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 1, "fillOpacity": 40, "stacking": { "mode": "normal", "group": "A" } },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 18 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (status) (count_over_time({env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt [$__auto]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Jobs by status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "Raw inference_latency lines for drill-down. Each carries job_id, status, point/segment counts, and per-phase timings.",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 27 },
+      "id": 7,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{env=~\"$env\", service=\"inference-worker\"} |= \"inference_latency\" | logfmt | status=~\"$status\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Raw inference_latency logs",
+      "type": "logs"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["trip-inference", "latency", "loki"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "staging|production", "value": "staging|production" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Environment",
+        "multi": false,
+        "name": "env",
+        "options": [
+          { "selected": true, "text": "staging|production", "value": "staging|production" },
+          { "selected": false, "text": "staging", "value": "staging" },
+          { "selected": false, "text": "production", "value": "production" }
+        ],
+        "query": "staging|production,staging,production",
+        "type": "custom"
+      },
+      {
+        "current": { "selected": false, "text": ".*", "value": ".*" },
+        "hide": 0,
+        "label": "Status (regex)",
+        "name": "status",
+        "options": [],
+        "query": ".*",
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["30s", "1m", "5m"],
+    "time_options": ["1h", "6h", "24h", "7d", "30d"]
+  },
+  "timezone": "browser",
+  "title": "Trip Inference Latency",
+  "uid": "trip-inference-latency",
+  "version": 1
+}
