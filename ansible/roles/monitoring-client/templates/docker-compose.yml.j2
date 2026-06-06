@@ -18,7 +18,14 @@ services:
     restart: unless-stopped
 
   cadvisor:
-    image: {{ cadvisor_image | default('gcr.io/cadvisor/cadvisor:latest') }}
+    image: {{ cadvisor_image | default('gcr.io/cadvisor/cadvisor:v0.55.1') }}
+    # cadvisor's defaults re-walk every container and every host cgroup once per second with
+    # all collectors on, which pegs a whole core on a busy host (it was sitting at 100% CPU on
+    # the 3-core staging VM and starving deploys). 30s housekeeping + docker-only keeps the
+    # per-container CPU/mem/net series the dashboards use at far lower resolution and cost.
+    command:
+      - --housekeeping_interval=30s
+      - --docker_only=true
     ports:
       - "{{ monitoring_cadvisor_port }}:8080"
     volumes:
@@ -29,6 +36,11 @@ services:
       - /dev/disk/:/dev/disk:ro
     devices:
       - /dev/kmsg
+    # Hard cap so a future runaway can never starve the host again; well above steady-state.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
     restart: unless-stopped
 
   # Tails Docker container stdout/stderr and ships structured JSON logs to Loki
