@@ -19,3 +19,18 @@ monitoring_redis_bull_wait_keys:
   - bull:sensor_processing_jobs:wait
   - bull:trip_results:wait
   - bull:sensor_compaction:wait
+
+# --- trip-inference worker (deploy/inference/playbook-inference.yml) ---
+# Shared across both app VMs: one MLflow registry and one infra-tile-service serve both.
+# MLflow sits behind the internal oauth2-proxy front door; a headless worker needs a token at
+# inference_mlflow_tracking_uri (MLFLOW_TRACKING_TOKEN, vault 'internal'), OR pin a mounted file via
+# inference_checkpoint and skip the registry. Leave one of the two configured.
+inference_mlflow_tracking_uri: "https://mlflow.internal.hero2.org"
+
+# Fetch-on-miss park flow. Keep 'local' until the infra-tile stack (API + fetch-worker) is deployed
+# on the internal VM and reachable from the app VMs; flipping to tile_cache before then parks jobs
+# that never resume. To activate: deploy the infra-tile stack, set the URL below, then redeploy the
+# worker with inference_infra_backend=tile_cache.
+inference_infra_backend: local
+# inference_infra_backend: tile_cache
+# inference_infra_tile_url: "https://infra-tile.internal.hero2.org"
