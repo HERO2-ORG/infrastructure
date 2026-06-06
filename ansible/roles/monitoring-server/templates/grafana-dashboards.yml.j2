@@ -11,4 +11,6 @@ providers:
     allowUiUpdates: false
     options:
       path: /etc/grafana/dashboards
-      foldersFromFilesStructure: false
+      # Folder = subdirectory name, so dashboards/<Folder>/foo.json lands in <Folder>.
+      # Keeps each dashboard with its area (and its alerts) instead of all in General.
+      foldersFromFilesStructure: true
