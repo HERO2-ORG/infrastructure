@@ -22,10 +22,10 @@ monitoring_redis_bull_wait_keys:
 
 # --- trip-inference worker (deploy/inference/playbook-inference.yml) ---
 # Shared across both app VMs: one MLflow registry and one infra-tile-service serve both.
-# MLflow sits behind the internal oauth2-proxy front door; a headless worker needs a token at
-# inference_mlflow_tracking_uri (MLFLOW_TRACKING_TOKEN, vault 'internal'), OR pin a mounted file via
-# inference_checkpoint and skip the registry. Leave one of the two configured.
-inference_mlflow_tracking_uri: "https://mlflow.internal.hero2.org"
+# The worker polls the registry through MLflow's token-gated service-auth route (mlflow-svc-auth on
+# the internal VM :5001, firewalled to the app VMs); it sends MLFLOW_SERVICE_TOKEN as the bearer.
+# This is the headless path - the Google-OAuth front door (mlflow.internal.hero2.org) is for humans.
+inference_mlflow_tracking_uri: "http://157.173.100.1:5001"
 
 # Fetch-on-miss park flow. Keep 'local' until the infra-tile stack (API + fetch-worker) is deployed
 # on the internal VM and reachable from the app VMs; flipping to tile_cache before then parks jobs
