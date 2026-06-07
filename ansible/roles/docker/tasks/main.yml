@@ -57,3 +57,24 @@
     owner: "{{ deploy_user }}"
     group: "{{ deploy_user }}"
     mode: "0755"
+
+# The provider IPv6 path black-holes large packets (PMTU): big transfers such as Docker Hub
+# image pulls stall at ~200KB/s and time out, while IPv4 runs ~13MB/s. dockerd is written in
+# Go, which ignores /etc/gai.conf, so it keeps picking the broken IPv6 path. No public origin
+# has an AAAA record, so nothing inbound needs IPv6 here; force everything onto IPv4.
+- name: Disable IPv6 (broken provider path stalls docker image pulls)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-disable-ipv6.conf
+    content: |
+      # Managed by Ansible (docker role).
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
+    owner: root
+    group: root
+    mode: "0644"
+  register: disable_ipv6_conf
+
+- name: Apply sysctl (disable IPv6)
+  ansible.builtin.command: sysctl --system
+  changed_when: false
+  when: disable_ipv6_conf.changed
