@@ -90,11 +90,25 @@ groups:
   # The blackbox probe can't see it; only the queue can.
   - name: bullmq_queues
     rules:
+      # Failed sets are terminal: those trips never reach the user and are invisible in
+      # the DB (the 2026-06 incident sat at 1845 failed sensor jobs behind green
+      # dashboards). Any non-empty failed set pages.
+      - alert: BullQueueFailedJobs
+        expr: redis_key_size{job="redis_bullmq",key=~"bull:.*:failed"} > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "BullMQ jobs are failing terminally"
+{% raw %}
+          description: "{{ $labels.env }}: {{ $labels.key }} holds {{ $value }} failed job(s). These trips will never reach a user; inspect failedReason on the queue and replay or drain."
+{% endraw %}
+
       - alert: TripResultsQueueBacklog
         expr: redis_key_size{job="redis_bullmq",key="bull:trip_results:wait"} > 100
         for: 10m
         labels:
-          severity: warning
+          severity: critical
         annotations:
           summary: "Backend not consuming trip-inference results"
 {% raw %}
@@ -105,7 +119,7 @@ groups:
         expr: redis_key_size{job="redis_bullmq",key="bull:sensor_processing_jobs:wait"} > 100
         for: 10m
         labels:
-          severity: warning
+          severity: critical
         annotations:
           summary: "Trip-inference microservice not consuming sensor batches"
 {% raw %}
@@ -116,7 +130,7 @@ groups:
         expr: redis_key_size{job="redis_bullmq",key="bull:sensor_compaction:wait"} > 5
         for: 1h
         labels:
-          severity: warning
+          severity: critical
         annotations:
           summary: "Daily sensor compaction job not running"
 {% raw %}

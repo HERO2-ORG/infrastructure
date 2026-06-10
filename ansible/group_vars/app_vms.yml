@@ -10,15 +10,19 @@ backend_compose_project_name: backend
 backend_app_network_external_name: "{{ backend_compose_project_name }}_app"
 backend_env_file_path: "{{ stack_base_path }}/backend/.env"
 
-# BullMQ queue depths the monitoring server alerts on. List of `bull:<queue>:wait`
-# keys — `wait` is BullMQ's pending-job LIST, so LLEN is the queue depth.
+# BullMQ queue state the monitoring server alerts on, as redis_key_size key patterns.
+# `wait`/`active` are LISTs (LLEN), `delayed`/`failed`/`completed` are ZSETs (ZCARD).
 # Backlog on either side means one half of the pipeline has stalled:
 #   sensor_processing_jobs growing → trip-inference microservice is down/slow
 #   trip_results growing            → backend's startTripResultsWorker has died
-monitoring_redis_bull_wait_keys:
-  - bull:sensor_processing_jobs:wait
-  - bull:trip_results:wait
-  - bull:sensor_compaction:wait
+# `failed` growing means jobs are terminally dying — invisible in the DB, only the
+# queue shows it.
+monitoring_redis_bull_keys:
+  - "bull:*:wait"
+  - "bull:*:active"
+  - "bull:*:delayed"
+  - "bull:*:failed"
+  - "bull:*:completed"
 
 # --- trip-inference worker (deploy/inference/playbook-inference.yml) ---
 # Shared across both app VMs: one MLflow registry and one infra-tile-service serve both.

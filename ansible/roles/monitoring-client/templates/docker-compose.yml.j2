@@ -55,9 +55,10 @@ services:
       - /tmp/alloy:/tmp/alloy
     restart: unless-stopped
 
-  # BullMQ queue-depth probe. --check-keys exposes LLEN of each `bull:<queue>:wait`
-  # LIST as redis_key_size{key="..."} — that's the metric the monitoring server's
-  # backlog alerts evaluate. We deliberately do not surface queue depth via the
+  # BullMQ queue-state probe. --check-keys exposes the size of every matching
+  # queue-state key (wait/active/delayed/failed/completed) as
+  # redis_key_size{key="..."} — the metric the monitoring server's backlog and
+  # failed-job alerts evaluate. We deliberately do not surface queue depth via the
   # backend's /health (the PR #88 follow-up: a hung backend worker can't honestly
   # report on itself; reading the queue from outside catches both producer and
   # consumer failures with one signal).
@@ -70,7 +71,7 @@ services:
     image: {{ redis_exporter_image | default('oliver006/redis_exporter:v1.62.0') }}
     command:
       - --redis.addr=redis://redis:6379
-      - --check-keys={{ monitoring_redis_bull_wait_keys | join(',') }}
+      - --check-keys={{ monitoring_redis_bull_keys | join(',') }}
     env_file:
       - path: {{ backend_env_file_path }}
         required: false

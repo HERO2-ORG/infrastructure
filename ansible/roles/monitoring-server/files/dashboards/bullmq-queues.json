@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "description": "BullMQ queue wait-list depths per environment. Mirrors TripResultsQueueBacklog, SensorProcessingQueueBacklog, and SensorCompactionQueueBacklog alerts. Threshold lines drawn at alert firing levels.",
+  "description": "BullMQ queue state (wait/active/delayed/failed/completed) per environment. Mirrors TripResultsQueueBacklog, SensorProcessingQueueBacklog, SensorCompactionQueueBacklog, and BullQueueFailedJobs alerts. Threshold lines drawn at alert firing levels.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -10,72 +10,96 @@
   "panels": [
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Current queue depths. Anything in red is at or above alert threshold.",
+      "description": "Current size of every BullMQ state key. wait = pending, active = in flight, delayed = scheduled/retrying, failed = terminally dead (should be empty), completed = retained history.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
           "custom": {
             "align": "auto",
-            "displayMode": "color-background",
-            "filterable": false
+            "displayMode": "auto",
+            "filterable": true
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "orange", "value": 1 },
-              { "color": "red", "value": 100 }
+              { "color": "text", "value": null }
             ]
           }
         },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "bull:sensor_compaction:wait" },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "orange", "value": 1 },
-                    { "color": "red", "value": 5 }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "options": {
         "cellHeight": "sm",
         "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
         "showHeader": true,
-        "sortBy": [{ "desc": true, "displayName": "Depth" }]
+        "sortBy": [{ "desc": true, "displayName": "Size" }]
       },
       "pluginVersion": "13.0.1",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "redis_key_size{job=\"redis_bullmq\",env=~\"$env\",key=~\"bull:.*:wait\"}",
+          "expr": "redis_key_size{job=\"redis_bullmq\",env=~\"$env\",key=~\"bull:.*\"}",
           "format": "table",
           "instant": true,
           "refId": "A"
         }
       ],
-      "title": "Current queue depths",
+      "title": "Current queue state",
       "transformations": [
         {
           "id": "organize",
           "options": {
             "excludeByName": { "Time": true, "__name__": true, "job": true, "service": true, "instance": true },
-            "renameByName": { "env": "Environment", "key": "Queue", "Value": "Depth" }
+            "renameByName": { "env": "Environment", "key": "Queue state key", "Value": "Size" }
           }
         }
       ],
       "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "BullQueueFailedJobs pages when any failed set is non-empty for 15 minutes. Failed jobs are terminal: their trips never reach the user and are invisible in the database, only this set shows them.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": false,
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "id": 5,
+      "options": {
+        "legend": { "calcs": ["last", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "13.0.1",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "redis_key_size{job=\"redis_bullmq\",env=~\"$env\",key=~\"bull:.*:failed\"}",
+          "legendFormat": "{{env}} {{key}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Failed jobs (terminal, should be zero)",
+      "type": "timeseries"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -102,7 +126,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "id": 2,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -145,7 +169,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "id": 3,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -188,7 +212,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
       "id": 4,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },

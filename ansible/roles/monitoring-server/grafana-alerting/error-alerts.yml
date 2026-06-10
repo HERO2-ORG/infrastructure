@@ -116,3 +116,39 @@ groups:
           description: "First occurrence detected on {{ $labels.env }}"
         labels:
           severity: critical
+
+      # Fires on any backend-origin error at all (every error should page, not just
+      # spikes or first occurrences). Grouped by errorType+env with the policy's 1h
+      # repeat interval, so a persisting error re-pages hourly rather than per line.
+      - uid: any-error
+        title: Backend error occurred
+        condition: D
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: loki
+            model:
+              editorMode: code
+              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level = "error" | errorType != "" [5m]))'
+              queryType: instant
+              refId: A
+          - refId: D
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: D
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "Error: {{ $labels.errorType }}"
+          description: "{{ $values.A }} occurrence(s) in the last 5 minutes on {{ $labels.env }}"
+        labels:
+          severity: critical
