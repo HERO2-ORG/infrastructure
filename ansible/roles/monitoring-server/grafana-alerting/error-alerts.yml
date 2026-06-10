@@ -19,6 +19,13 @@ policies:
     group_interval: 10m
     repeat_interval: 1h
 
+# error-spike was removed: the any-error rule pages at the first occurrence, so a
+# >10/hour threshold carried no extra information. deleteRules evicts the previously
+# provisioned rule from Grafana's DB (dropping it from `groups` alone would not).
+deleteRules:
+  - orgId: 1
+    uid: error-spike
+
 groups:
   - orgId: 1
     name: error-monitoring
@@ -30,40 +37,6 @@ groups:
       # so forged client logs can never trigger these. Flutter errors stay on the dashboard
       # (non-paging) until app attestation makes them trustworthy.
       #
-      # Fires when a single error type exceeds 10 occurrences in one hour.
-      - uid: error-spike
-        title: Error spike
-        condition: D
-        data:
-          - refId: A
-            relativeTimeRange:
-              from: 3600
-              to: 0
-            datasourceUid: loki
-            model:
-              editorMode: code
-              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level = "error" | errorType != "" [1h]))'
-              queryType: instant
-              refId: A
-          - refId: D
-            datasourceUid: __expr__
-            model:
-              type: threshold
-              refId: D
-              expression: A
-              conditions:
-                - evaluator:
-                    params: [10]
-                    type: gt
-        noDataState: OK
-        execErrState: Error
-        for: 0s
-        annotations:
-          summary: "Error spike: {{ $labels.errorType }}"
-          description: "{{ $values.A }} occurrences in the last hour on {{ $labels.env }}"
-        labels:
-          severity: critical
-
       # Fires when an error type is seen for the first time (all 24h occurrences
       # happened in the last hour, meaning it surfaced within the last hour).
       - uid: new-error-type

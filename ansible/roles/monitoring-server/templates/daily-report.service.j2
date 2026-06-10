@@ -1,0 +1,15 @@
+[Unit]
+Description=Hero2 daily ops report to Slack
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# One-shot container on the monitoring compose network so it can reach loki/prometheus
+# by service name. The webhook lives only in this root-readable unit (mode 0600),
+# mirroring how alertmanager.yml holds it.
+ExecStart=/usr/bin/docker run --rm \
+  --network {{ monitoring_server_stack_path | basename }}_default \
+  -v {{ monitoring_server_stack_path }}/daily-report.py:/daily-report.py:ro \
+  -e SLACK_WEBHOOK_URL={{ monitoring_slack_webhook_url }} \
+  python:3.12-alpine python /daily-report.py

@@ -6,6 +6,7 @@ groups:
         for: 2m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Server is down"
 {% raw %}
@@ -17,6 +18,7 @@ groups:
         for: 10m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Disk usage above 90%"
 {% raw %}
@@ -28,6 +30,7 @@ groups:
         for: 30m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Disk likely to fill within 24 hours"
 {% raw %}
@@ -39,6 +42,7 @@ groups:
         for: 10m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Memory almost exhausted"
 {% raw %}
@@ -57,6 +61,7 @@ groups:
         for: 15m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Host is saturated"
 {% raw %}
@@ -68,6 +73,7 @@ groups:
         for: 10m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Public endpoint is down"
 {% raw %}
@@ -79,6 +85,7 @@ groups:
         for: 1h
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "TLS certificate auto-renewal is failing"
 {% raw %}
@@ -98,6 +105,7 @@ groups:
         for: 15m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "BullMQ jobs are failing terminally"
 {% raw %}
@@ -109,6 +117,7 @@ groups:
         for: 10m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Backend not consuming trip-inference results"
 {% raw %}
@@ -120,6 +129,7 @@ groups:
         for: 10m
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Trip-inference microservice not consuming sensor batches"
 {% raw %}
@@ -131,6 +141,7 @@ groups:
         for: 1h
         labels:
           severity: critical
+          notify_resolved: "true"
         annotations:
           summary: "Daily sensor compaction job not running"
 {% raw %}

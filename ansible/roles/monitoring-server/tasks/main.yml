@@ -93,6 +93,37 @@
     - { name: loki, uid: "10001" }
   notify: Restart monitoring stack
 
+- name: Copy daily report script
+  ansible.builtin.copy:
+    src: daily-report.py
+    dest: "{{ monitoring_server_stack_path }}/daily-report.py"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+
+# The webhook is rendered into the unit, so it is root-only - same handling as
+# alertmanager.yml above.
+- name: Install daily report systemd units
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: daily-report.service.j2, dest: hero2-daily-report.service, mode: "0600" }
+    - { src: daily-report.timer.j2, dest: hero2-daily-report.timer, mode: "0644" }
+  no_log: "{{ item.dest == 'hero2-daily-report.service' }}"
+  register: daily_report_units
+
+- name: Enable daily report timer
+  ansible.builtin.systemd_service:
+    name: hero2-daily-report.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ daily_report_units.changed }}"
+  when: not ansible_check_mode
+
 - name: Start monitoring server stack (apply mode only)
   community.docker.docker_compose_v2:
     project_src: "{{ monitoring_server_stack_path }}"

@@ -8,12 +8,36 @@ route:
   repeat_interval: 12h
   receiver: drop
   routes:
+    # State alerts (queue depth, disk, host health) opt in via notify_resolved: the
+    # condition measurably ending is real information. Log-count alerts must NOT set
+    # it - their "resolved" only means "quiet for one evaluation window", not fixed.
+    - receiver: slack-alerts-resolving
+      matchers:
+        - severity="critical"
+        - notify_resolved="true"
     - receiver: slack-alerts
       matchers:
         - severity="critical"
 
 receivers:
   - name: drop
+  - name: slack-alerts-resolving
+    slack_configs:
+      - api_url: "{{ monitoring_slack_webhook_url }}"
+        channel: "{{ monitoring_slack_channel }}"
+        username: Hero2 Monitoring
+        send_resolved: true
+        icon_emoji: '{% raw %}{{ if eq .Status "firing" }}:rotating_light:{{ else }}:white_check_mark:{{ end }}{% endraw %}'
+        color: '{% raw %}{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}{% endraw %}'
+        title: '{% raw %}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}{{ with .CommonLabels.env }} · {{ . }}{{ end }}{% endraw %}'
+        text: |-
+          {% raw %}{{ range .Alerts -}}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{- with .Labels.service }}
+          service: `{{ . }}` · {{ end }}severity: `{{ .Labels.severity }}`
+
+          {{ end -}}{% endraw %}
   - name: slack-alerts
     slack_configs:
       - api_url: "{{ monitoring_slack_webhook_url }}"

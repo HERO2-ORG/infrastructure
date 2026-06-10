@@ -1,0 +1,10 @@
+[Unit]
+Description=Hero2 daily ops report at 21:00 Europe/Berlin
+
+[Timer]
+OnCalendar=*-*-* 21:00:00 Europe/Berlin
+# Fire on next boot if the VM was down at 21:00.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
