@@ -49,16 +49,12 @@ groups:
             datasourceUid: __expr__
             model:
               type: threshold
+              refId: D
+              expression: A
               conditions:
                 - evaluator:
                     params: [10]
                     type: gt
-                  query:
-                    params: [A]
-                  reducer:
-                    params: []
-                    type: last
-                  type: query
         noDataState: OK
         execErrState: Error
         for: 0s
@@ -106,16 +102,12 @@ groups:
             datasourceUid: __expr__
             model:
               type: threshold
+              refId: E
+              expression: C
               conditions:
                 - evaluator:
                     params: [0]
                     type: gt
-                  query:
-                    params: [C]
-                  reducer:
-                    params: []
-                    type: last
-                  type: query
         noDataState: OK
         execErrState: Error
         for: 0s
