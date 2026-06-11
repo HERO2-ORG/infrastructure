@@ -22,6 +22,7 @@
       dest: docker-compose.yml
     - src: alloy-config.alloy.j2
       dest: alloy-config.alloy
+  register: monitoring_client_files
 
 - name: Start monitoring client stack (apply mode only)
   community.docker.docker_compose_v2:
@@ -29,3 +30,15 @@
     state: present
     pull: always
   when: not ansible_check_mode
+
+# The Alloy config is bind-mounted, so a content change does not alter the compose
+# service hash and `state: present` leaves the old process running with the old
+# config loaded.
+- name: Restart Alloy when its config changed
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_client_stack_path }}"
+    services: [alloy]
+    state: restarted
+  when:
+    - not ansible_check_mode
+    - monitoring_client_files.changed

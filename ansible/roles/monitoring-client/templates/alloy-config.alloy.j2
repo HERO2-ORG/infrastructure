@@ -35,6 +35,8 @@ loki.source.docker "containers" {
   refresh_interval = "1s"
 }
 
+// Changes to this file only take effect through the role's config-change restart:
+// the file is bind-mounted, so compose alone never recreates the alloy container.
 loki.process "pipeline" {
   forward_to = [loki.write.loki.receiver]
 
