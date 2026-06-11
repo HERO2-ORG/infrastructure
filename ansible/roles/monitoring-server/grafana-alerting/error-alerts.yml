@@ -50,7 +50,7 @@ groups:
             datasourceUid: loki
             model:
               editorMode: code
-              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level = "error" | errorType != "" [1h]))'
+              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level =~ "error|50" | errorType != "" [1h]))'
               queryType: instant
               refId: A
           - refId: B
@@ -60,7 +60,7 @@ groups:
             datasourceUid: loki
             model:
               editorMode: code
-              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level = "error" | errorType != "" [24h]))'
+              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level =~ "error|50" | errorType != "" [24h]))'
               queryType: instant
               refId: B
           # ($A > 0) * ($B == $A): 1 when errors exist AND all 24h occurrences are
@@ -104,7 +104,7 @@ groups:
             datasourceUid: loki
             model:
               editorMode: code
-              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level = "error" | errorType != "" [5m]))'
+              expr: 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level =~ "error|50" | errorType != "" [5m]))'
               queryType: instant
               refId: A
           - refId: D

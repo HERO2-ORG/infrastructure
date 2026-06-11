@@ -26,7 +26,7 @@ WEBHOOK = os.environ["SLACK_WEBHOOK_URL"]
 
 ERRORS_24H = (
     'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"}'
-    ' | json level, errorType | level = "error" | errorType != "" [24h]%s))'
+    ' | json level, errorType | level =~ "error|50" | errorType != "" [24h]%s))'
 )
 VOLUME_24H = 'sum by (env) (count_over_time({env=~"staging|production"}[24h]))'
 
