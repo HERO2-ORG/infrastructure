@@ -38,20 +38,18 @@ loki.source.docker "containers" {
 loki.process "pipeline" {
   forward_to = [loki.write.loki.receiver]
 
-  // Docker wraps each log line: {"log":"<payload>","stream":"stdout","time":"<ts>"}
+  // loki.source.docker reads via the Docker API and delivers the line already
+  // unwrapped (NO {"log":...,"time":...} envelope - that wrapper only exists in the
+  // json-file driver's files). An earlier envelope-parsing stage here meant the inner
+  // parse never ran and level/source were never promoted, which silently disabled the
+  // alerts' source!="flutter" scoping: an absent label matches the negative matcher,
+  // so client-submitted /logs errors could page.
+  //
+  // Only level/source become labels (bounded cardinality). errorType is
+  // attacker-controllable free text, so it stays a query-time `| json` field (the
+  // dashboards/alerts parse it) and is never a Loki stream label. analyticsId/
+  // sessionId likewise stay as parsed fields only — never labels.
   stage.json {
-    expressions = {
-      raw_log     = "log",
-      docker_time = "time",
-    }
-  }
-
-  // Parse inner Pino JSON. Only level/source become labels (bounded cardinality).
-  // errorType is attacker-controllable free text, so it stays a query-time `| json`
-  // field (the dashboards/alerts parse it) and is never a Loki stream label.
-  // analyticsId/sessionId likewise stay as parsed fields only — never labels.
-  stage.json {
-    source = "raw_log"
     expressions = {
       level  = "level",
       source = "source",
@@ -63,16 +61,6 @@ loki.process "pipeline" {
       level  = "",
       source = "",
     }
-  }
-
-  // Replace Docker envelope with inner Pino JSON so Grafana shows the actual message.
-  stage.output {
-    source = "raw_log"
-  }
-
-  stage.timestamp {
-    source = "docker_time"
-    format = "RFC3339Nano"
   }
 }
 
