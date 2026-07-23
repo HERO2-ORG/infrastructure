@@ -12,8 +12,8 @@ doubles as pipeline liveness: the paging rules use noDataState=OK, so a dead log
 pipeline is otherwise indistinguishable from a healthy quiet day.
 
 Server section reports capacity signals only (CPU avg/peak, mem peak, disk now) and
-raises flags when a threshold suggests an upgrade conversation. Activity is a single
-pipeline proxy (completed sensor jobs / published results), not product analytics.
+raises flags when a threshold suggests an upgrade conversation. Activity counts the
+worker's own per-job log lines plus live queue depth, not product analytics.
 
 Stdlib only: runs as a one-shot python:alpine container on the monitoring network.
 """
@@ -61,12 +61,23 @@ STACK_UP = 'up{job="monitoring_stack"}'
 # line just restates the current state.
 FIRING = 'sum by (alertname, env) (ALERTS{alertstate="firing", severity="critical"})'
 
-JOBS_DONE = (
-    'increase(redis_key_size{job="redis_bullmq",'
-    'key="bull:sensor_processing_jobs:completed"}[24h])'
+# Throughput comes from the worker's own per-job log line, NOT from
+# bull:*:completed. BullMQ trims the completed set to its last 1000 entries, so that
+# gauge pins at 1000 and increase() over it decays to zero on exactly the busy
+# pipelines worth reporting on - it read "0 sensor batches processed" for a week while
+# the worker was in fact saturating a 3-core box. The worker emits one inference_latency
+# line per job, which is uncapped and counts what actually ran.
+JOBS_INFERRED = (
+    'sum by (env) (count_over_time({container="trip_inference_worker"}'
+    ' |= "inference_latency" [24h]))'
 )
-RESULTS_DONE = (
-    'increase(redis_key_size{job="redis_bullmq",key="bull:trip_results:completed"}[24h])'
+JOBS_PUBLISHED = (
+    'sum by (env) (count_over_time({container="trip_inference_worker"}'
+    ' |= "inference_latency" |= "status=ok" [24h]))'
+)
+# Queue depth is a live gauge, never trimmed, so it stays on Prometheus.
+QUEUE_BACKLOG = (
+    'redis_key_size{job="redis_bullmq",key=~"bull:(sensor_processing_jobs|trip_results):wait"}'
 )
 
 
@@ -182,18 +193,22 @@ def section_alerting(lines):
 
 def section_activity(lines):
     try:
-        jobs = as_map(prom_instant(JOBS_DONE), "env")
-        results = as_map(prom_instant(RESULTS_DONE), "env")
+        inferred = as_map(loki_instant(JOBS_INFERRED), "env")
+        published = as_map(loki_instant(JOBS_PUBLISHED), "env")
+        backlog = as_map(prom_instant(QUEUE_BACKLOG), "env", "key")
     except Exception as exc:
         lines.append(f":warning: activity queries failed: {exc}")
         return
-    for (env,) in sorted(set(jobs) | set(results)):
+    for (env,) in sorted(set(inferred) | set(published)):
         lines.append(
-            f"{env}: {jobs.get((env,), 0):.0f} sensor batches processed,"
-            f" {results.get((env,), 0):.0f} trip results published"
+            f"{env}: {inferred.get((env,), 0):.0f} jobs inferred,"
+            f" {published.get((env,), 0):.0f} produced segments"
         )
-    if not jobs and not results:
+    if not inferred and not published:
         lines.append("no pipeline activity recorded")
+    for (env, key), depth in sorted(backlog.items()):
+        if depth > 0:
+            lines.append(f"{env}: {depth:.0f} waiting in `{key.split(':')[1]}`")
 
 
 def main():
