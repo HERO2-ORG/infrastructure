@@ -1,3 +1,11 @@
+#jinja2: trim_blocks: False
+# trim_blocks (Ansible's default) drops the newline after a block tag. The Go templates
+# below must be wrapped in {% raw %}, and each `text:` block scalar ends on a line whose
+# last token is {% endraw %}, so the trimmed newline folded the next receiver's
+# `- name:` into the scalar and turned its `slack_configs:` into a duplicate key on the
+# previous receiver. Alertmanager then refused to load its config and crash-looped,
+# silently delivering nothing. Keep this header; `amtool check-config` in the role's
+# tasks is the backstop that fails the deploy instead of shipping a dead alertmanager.
 route:
   group_by:
     - env

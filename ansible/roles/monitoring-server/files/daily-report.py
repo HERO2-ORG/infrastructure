@@ -1,5 +1,10 @@
 """Daily ops digest posted to Slack at 21:00 Europe/Berlin (systemd timer).
 
+Alerting comes first because it qualifies everything below it: alertmanager reads its
+config only at start, so a bad config crash-loops it and silently swallows every page
+while this report keeps arriving as if all were well (that failure mode ran for six
+weeks). The section states whether delivery works and lists what Prometheus is firing.
+
 Errors are the core: last-24h backend-origin errors by type/env, split into new vs
 recurring vs quiet-since-yesterday. "Quiet" deliberately does NOT claim "resolved" -
 an error that did not recur may simply not have been exercised. The log-volume line
@@ -47,6 +52,15 @@ DISK_IN_30D = (
     'predict_linear(node_filesystem_avail_bytes{fstype!="tmpfs",mountpoint="/"}[7d],'
     " 30 * 86400)"
 )
+# Alertmanager and Loki cannot page about their own death - a crash-looping alertmanager
+# swallows every alert and reads exactly like a quiet week. This report is the only
+# out-of-band channel (one-shot container, straight to Slack), so it carries their health.
+STACK_UP = 'up{job="monitoring_stack"}'
+# Alerts Prometheus is firing right now. If alerting delivery is broken these are the
+# pages that were never sent; if it is healthy they are already in the channel and this
+# line just restates the current state.
+FIRING = 'sum by (alertname, env) (ALERTS{alertstate="firing", severity="critical"})'
+
 JOBS_DONE = (
     'increase(redis_key_size{job="redis_bullmq",'
     'key="bull:sensor_processing_jobs:completed"}[24h])'
@@ -143,6 +157,29 @@ def section_servers(lines):
         lines.append(":white_check_mark: no capacity flags")
 
 
+def section_alerting(lines):
+    try:
+        stack = prom_instant(STACK_UP)
+        firing = as_map(prom_instant(FIRING), "env", "alertname")
+    except Exception as exc:
+        lines.append(f":warning: alerting queries failed: {exc}")
+        return
+    down = [s["metric"].get("instance", "?") for s in stack if float(s["value"][1]) == 0]
+    if down:
+        lines.append(
+            f":rotating_light: DELIVERY BROKEN - {', '.join(sorted(down))} down."
+            " Alerts below were never sent to Slack."
+        )
+    elif not stack:
+        lines.append(":warning: monitoring stack health unknown - no `up` series")
+    else:
+        lines.append(":white_check_mark: alertmanager and loki up")
+    for (env, alertname), _ in sorted(firing.items()):
+        lines.append(f":rotating_light: firing now: {env} `{alertname}`")
+    if not firing:
+        lines.append("no alerts firing")
+
+
 def section_activity(lines):
     try:
         jobs = as_map(prom_instant(JOBS_DONE), "env")
@@ -160,7 +197,9 @@ def section_activity(lines):
 
 
 def main():
-    lines = [f"*Hero2 daily report - {date.today().isoformat()}* (last 24h)", "", "*Errors*"]
+    lines = [f"*Hero2 daily report - {date.today().isoformat()}* (last 24h)", "", "*Alerting*"]
+    section_alerting(lines)
+    lines += ["", "*Errors*"]
     section_errors(lines)
     lines += ["", "*Servers*"]
     section_servers(lines)

@@ -56,6 +56,40 @@
   no_log: "{{ item.dest == 'alertmanager.yml' }}"
   notify: Restart monitoring stack
 
+# Alertmanager only reads its config on start, so a malformed file does not fail the
+# deploy - it crash-loops afterwards and delivers nothing, which is indistinguishable
+# from a quiet week. amtool parses the file with the same strict unmarshaller the daemon
+# uses, so a config that fails here would have produced a dead alertmanager. Failing the
+# play leaves the previous (running) container untouched.
+- name: Validate rendered alertmanager config
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --entrypoint=amtool
+      - --volume={{ monitoring_server_stack_path }}/alertmanager.yml:/tmp/alertmanager.yml:ro
+      - "{{ alertmanager_image }}"
+      - check-config
+      - /tmp/alertmanager.yml
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Validate rendered Prometheus alert rules
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --entrypoint=promtool
+      - --volume={{ monitoring_server_stack_path }}/alert-rules.yml:/tmp/alert-rules.yml:ro
+      - "{{ prometheus_image }}"
+      - check
+      - rules
+      - /tmp/alert-rules.yml
+  changed_when: false
+  when: not ansible_check_mode
+
 - name: Sync Grafana dashboard JSONs
   ansible.builtin.copy:
     src: dashboards/

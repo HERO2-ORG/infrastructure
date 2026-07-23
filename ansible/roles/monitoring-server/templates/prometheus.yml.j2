@@ -17,6 +17,19 @@ scrape_configs:
       - targets:
           - localhost:9090
 
+  # Self-monitoring for the pieces that fail silently. Alertmanager reads its config
+  # only at start, so a bad config crash-loops it and every alert is swallowed -
+  # indistinguishable from a quiet week. Loki failing the same way hides the log
+  # pipeline. Neither can page about itself, so the daily report carries these:
+  # it runs as an independent one-shot container straight against Slack.
+  - job_name: monitoring_stack
+    static_configs:
+      - targets:
+          - alertmanager:9093
+          - loki:3100
+        labels:
+          env: internal
+
   - job_name: node
     static_configs:
       - targets:
