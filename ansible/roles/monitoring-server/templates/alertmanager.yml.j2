@@ -23,6 +23,10 @@ route:
       matchers:
         - severity="critical"
         - notify_resolved="true"
+    # Everything critical that does not opt into resolved notifications is a log alert
+    # (grafana-alerting/error-alerts.yml: new-error-type, any-error - both already scoped
+    # to env=~"staging|production"). That receiver broadcasts to the whole channel, so a
+    # future non-log critical rule must set notify_resolved="true" or it will @channel too.
     - receiver: slack-alerts
       matchers:
         - severity="critical"
@@ -46,17 +50,22 @@ receivers:
           service: `{{ . }}` · {{ end }}severity: `{{ .Labels.severity }}`
 
           {{ end -}}{% endraw %}
+  # Backend error logs on staging or production page the whole channel. `<!channel>` must
+  # sit inside `text` (one of the default mrkdwn_in fields) to be parsed as a broadcast
+  # rather than printed literally, and link_names lets Slack resolve it to a notification.
   - name: slack-alerts
     slack_configs:
       - api_url: "{{ monitoring_slack_webhook_url }}"
         channel: "{{ monitoring_slack_channel }}"
         username: Hero2 Monitoring
         send_resolved: false
+        link_names: true
         icon_emoji: '{% raw %}{{ if eq .Status "firing" }}:rotating_light:{{ else }}:white_check_mark:{{ end }}{% endraw %}'
         color: '{% raw %}{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}{% endraw %}'
         title: '{% raw %}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}{{ with .CommonLabels.env }} · {{ . }}{{ end }}{% endraw %}'
         text: |-
-          {% raw %}{{ range .Alerts -}}
+          {% raw %}<!channel>
+          {{ range .Alerts -}}
           *{{ .Annotations.summary }}*
           {{ .Annotations.description }}
           {{- with .Labels.service }}

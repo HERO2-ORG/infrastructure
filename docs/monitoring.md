@@ -16,7 +16,12 @@ App VMs run only monitoring clients:
 
 ## Alert Policy
 
-Slack receives only `severity="critical"` alerts. Resolved notifications are disabled.
+Slack receives only `severity="critical"` alerts, split into two receivers:
+
+- **State alerts** (the table below) set `notify_resolved="true"` and send a resolved notification, because the condition measurably ending is real information.
+- **Log alerts** (`new-error-type`, `any-error` in `grafana-alerting/error-alerts.yml`) do not. Their "resolved" would only mean "quiet for one evaluation window", not fixed. Because any backend-origin error log on staging or production is worth waking the team for, these `@channel` the monitoring channel.
+
+A new critical rule therefore has to set `notify_resolved="true"` unless it is a log alert, or it will broadcast to the whole channel.
 
 Current critical alerts:
 
