@@ -38,3 +38,42 @@
   community.general.ufw:
     state: enabled
     policy: deny
+
+# Docker publishes container ports with its own FORWARD rules, which bypass ufw
+# entirely; the internal VM's databases are therefore guarded in the
+# DOCKER-USER chain, the one hook Docker leaves to the host.
+- name: Install iptables persistence
+  ansible.builtin.apt:
+    name: iptables-persistent
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: inventory_hostname in groups.internal
+
+- name: Allow guarded Docker ports from the app VMs
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    in_interface: "{{ ansible_default_ipv4.interface }}"
+    protocol: tcp
+    source: "{{ item.0 }}"
+    destination_port: "{{ item.1 }}"
+    jump: RETURN
+    action: insert
+    rule_num: 1
+    comment: "hero2 app vm {{ item.0 }} to {{ item.1 }}"
+  loop: "{{ docker_guarded_allowed_sources | product(docker_guarded_ports) | list }}"
+  when: inventory_hostname in groups.internal
+  notify: Persist iptables
+
+- name: Drop guarded Docker ports from everywhere else
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    in_interface: "{{ ansible_default_ipv4.interface }}"
+    protocol: tcp
+    destination_ports: "{{ docker_guarded_ports }}"
+    jump: DROP
+    action: insert
+    rule_num: "{{ (docker_guarded_allowed_sources | length) * (docker_guarded_ports | length) + 1 }}"
+    comment: hero2 guarded docker ports
+  when: inventory_hostname in groups.internal
+  notify: Persist iptables

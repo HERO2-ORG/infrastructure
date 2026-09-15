@@ -19,6 +19,14 @@ monitoring_app_metrics_ports:
   - "{{ monitoring_cadvisor_port }}"
   - "{{ monitoring_redis_exporter_port }}"
 
+# Databases the internal VM publishes through Docker (internal-system-db on
+# 5433 for the analytics warehouse, hero2_postgres on 5432). Reachable only
+# from the app VMs; every other source is dropped in DOCKER-USER.
+docker_guarded_ports:
+  - 5432
+  - 5433
+docker_guarded_allowed_sources: "{{ groups.app_vms }}"
+
 loki_port: 3100
 loki_image: grafana/loki:3.5.0
 alloy_image: grafana/alloy:v1.8.3
