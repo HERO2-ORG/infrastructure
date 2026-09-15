@@ -41,39 +41,32 @@
 
 # Docker publishes container ports with its own FORWARD rules, which bypass ufw
 # entirely; the internal VM's databases are therefore guarded in the
-# DOCKER-USER chain, the one hook Docker leaves to the host.
-- name: Install iptables persistence
-  ansible.builtin.apt:
-    name: iptables-persistent
-    state: present
-  environment:
-    DEBIAN_FRONTEND: noninteractive
+# DOCKER-USER chain, the one hook Docker leaves to the host. The rules live in
+# a script re-applied by a systemd oneshot after docker starts (ufw's own
+# reload would not restore them, and iptables-persistent conflicts with ufw).
+- name: Install the Docker guard script
+  ansible.builtin.template:
+    src: hero2-docker-guard.sh.j2
+    dest: /usr/local/sbin/hero2-docker-guard
+    owner: root
+    group: root
+    mode: "0755"
   when: inventory_hostname in groups.internal
+  notify: Apply Docker guard
 
-- name: Allow guarded Docker ports from the app VMs
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    in_interface: "{{ ansible_default_ipv4.interface }}"
-    protocol: tcp
-    source: "{{ item.0 }}"
-    destination_port: "{{ item.1 }}"
-    jump: RETURN
-    action: insert
-    rule_num: 1
-    comment: "hero2 app vm {{ item.0 }} to {{ item.1 }}"
-  loop: "{{ docker_guarded_allowed_sources | product(docker_guarded_ports) | list }}"
+- name: Install the Docker guard unit
+  ansible.builtin.copy:
+    src: hero2-docker-guard.service
+    dest: /etc/systemd/system/hero2-docker-guard.service
+    owner: root
+    group: root
+    mode: "0644"
   when: inventory_hostname in groups.internal
-  notify: Persist iptables
+  notify: Apply Docker guard
 
-- name: Drop guarded Docker ports from everywhere else
-  ansible.builtin.iptables:
-    chain: DOCKER-USER
-    in_interface: "{{ ansible_default_ipv4.interface }}"
-    protocol: tcp
-    destination_ports: "{{ docker_guarded_ports }}"
-    jump: DROP
-    action: insert
-    rule_num: "{{ (docker_guarded_allowed_sources | length) * (docker_guarded_ports | length) + 1 }}"
-    comment: hero2 guarded docker ports
+- name: Enable the Docker guard unit
+  ansible.builtin.systemd:
+    name: hero2-docker-guard.service
+    enabled: true
+    daemon_reload: true
   when: inventory_hostname in groups.internal
-  notify: Persist iptables

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Guards Docker-published database ports in DOCKER-USER: only the app VMs may
+# reach them, everything else on the public interface is dropped. Idempotent,
+# so it can run on every boot and every deploy.
+set -eu
+IFACE="{{ ansible_default_ipv4.interface }}"
+PORTS="{{ docker_guarded_ports | join(',') }}"
+
+ensure() {
+  iptables -C DOCKER-USER "$@" 2>/dev/null || iptables -I DOCKER-USER 1 "$@"
+}
+
+iptables -N DOCKER-USER 2>/dev/null || true
+iptables -C DOCKER-USER -i "$IFACE" -p tcp -m multiport --dports "$PORTS" -m comment --comment "hero2 guarded docker ports" -j DROP 2>/dev/null \
+  || iptables -A DOCKER-USER -i "$IFACE" -p tcp -m multiport --dports "$PORTS" -m comment --comment "hero2 guarded docker ports" -j DROP
+{% for src in docker_guarded_allowed_sources %}
+{% for port in docker_guarded_ports %}
+ensure -s {{ src }} -i "$IFACE" -p tcp --dport {{ port }} -m comment --comment "hero2 app vm {{ src }} to {{ port }}" -j RETURN
+{% endfor %}
+{% endfor %}
