@@ -1,3 +1,5 @@
-- name: Persist iptables
-  ansible.builtin.command: netfilter-persistent save
-  changed_when: true
+- name: Apply Docker guard
+  ansible.builtin.systemd:
+    name: hero2-docker-guard.service
+    state: restarted
+    daemon_reload: true
