@@ -35,6 +35,16 @@ monitoring_http_probes:
     service: backend
     target: https://api.hero2.org/health
     module: http_2xx
+  - name: staging-auth-refresh
+    env: staging
+    service: backend
+    target: https://api.dev.hero2.org/auth/refresh
+    module: http_auth_refresh_401
+  - name: production-auth-refresh
+    env: production
+    service: backend
+    target: https://api.hero2.org/auth/refresh
+    module: http_auth_refresh_401
   - name: staging-keycloak
     env: staging
     service: keycloak

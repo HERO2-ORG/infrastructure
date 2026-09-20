@@ -1,0 +1,9 @@
+[Unit]
+Description=Resolve Hero2 dependency hostnames through the host resolver and expose the result to node-exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hero2-dns-check.sh {{ dns_check_names | join(' ') }}
+Nice=19

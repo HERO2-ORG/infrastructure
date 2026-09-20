@@ -92,6 +92,36 @@ groups:
           description: "{{ $labels.instance }} TLS certificate expires in less than 7 days. Traefik should renew automatically, so DNS, HTTP-01 reachability, Traefik, and ACME storage need investigation."
 {% endraw %}
 
+      # The host resolver is what every container's lookups end up at. When it is
+      # stuck (2026-09-20: resolved parked on the unreachable IPv6 upstream) logins,
+      # Google sign-in, log shipping and tile fetches all fail while /health stays green.
+      - alert: HostDnsResolutionFailing
+        expr: hero2_dns_lookup_success == 0
+        for: 3m
+        labels:
+          severity: critical
+          notify_resolved: "true"
+        annotations:
+          summary: "Host DNS resolution is failing"
+{% raw %}
+          description: "{{ $labels.instance }} cannot resolve {{ $labels.name }} through its resolver, so every container on it fails the same lookup. Check `resolvectl status` on the host; the docker role pins IPv4 upstreams and `resolvectl dns <iface> <servers>` restores service immediately."
+{% endraw %}
+
+      # A container in a restart loop passes shallow probes (the labeling API restarted
+      # 29,000 times behind a green frontend probe). cadvisor opens a fresh series per
+      # (re)start, so counting distinct series per container name over 30m counts starts.
+      - alert: ContainerRestartLoop
+        expr: count by (name, env, instance) (last_over_time(container_start_time_seconds{name!=""}[30m])) > 3
+        for: 10m
+        labels:
+          severity: critical
+          notify_resolved: "true"
+        annotations:
+          summary: "Container is restart-looping"
+{% raw %}
+          description: "{{ $labels.name }} ({{ $labels.env }}) started {{ $value }} times in the last 30 minutes. Read `docker logs` for the startup crash; the service is not serving."
+{% endraw %}
+
   # Catches the failure mode the PR #88 follow-up flagged: the backend's
   # startTripResultsWorker has died but the HTTP /health check still returns 200.
   # The blackbox probe can't see it; only the queue can.

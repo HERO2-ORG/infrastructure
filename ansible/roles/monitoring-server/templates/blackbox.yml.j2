@@ -30,3 +30,22 @@ modules:
         - 303
         - 307
         - 308
+
+  # Credential-free synthetic sign-in: a junk refresh token must come back as 401 from
+  # Keycloak via the backend. Any other status (500 while the host resolver was dead on
+  # 2026-09-20, 503 from the backend's UpstreamUnavailableError mapping) means real
+  # logins and token refreshes are failing too.
+  http_auth_refresh_401:
+    prober: http
+    timeout: 10s
+    http:
+      method: POST
+      preferred_ip_protocol: ip4
+      headers:
+        Content-Type: application/json
+      body: '{"refreshToken":"monitoring-canary"}'
+      valid_http_versions:
+        - HTTP/1.1
+        - HTTP/2.0
+      valid_status_codes:
+        - 401
