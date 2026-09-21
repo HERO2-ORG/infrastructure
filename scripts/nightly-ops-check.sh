@@ -89,10 +89,14 @@ report() {
   done | rows_or_none
 
   section "Xcode Cloud check runs on hero2-app heads"
+  # A branch head carries GitHub Actions and Xcode Cloud checks alike, so without the
+  # app filter the Actions jobs reported above reappear here under the Xcode Cloud
+  # heading and read as archive failures. Xcode Cloud reports a failed build as
+  # action_required, which the conclusion filter below keeps.
   for b in staging production; do
     sha="$(gh api "repos/$ORG/hero2-app/commits/$b" --jq .sha 2>/dev/null)"
     [ -n "$sha" ] || { echo "- $b: (unreadable)"; continue; }
-    gh api "repos/$ORG/hero2-app/commits/$sha/check-runs" --jq ".check_runs[] | \"$b \(.name): \(.conclusion // .status)\"" 2>/dev/null \
+    gh api "repos/$ORG/hero2-app/commits/$sha/check-runs" --jq ".check_runs[] | select(.app.slug == \"xcode-cloud\") | \"$b \(.name): \(.conclusion // .status)\"" 2>/dev/null \
       | grep -vE ": (success|skipped)$" | sed 's/^/- /' || true
   done | { rows="$(cat)"; if [ -n "$rows" ]; then printf '%s\n' "$rows"; else echo "- all successful"; fi; }
 }
