@@ -47,5 +47,22 @@ docker_compose_arch: "{{ 'x86_64' if ansible_facts.architecture == 'x86_64' else
 docker_compose_plugin_dir: /usr/local/lib/docker/cli-plugins
 docker_compose_plugin_path: "{{ docker_compose_plugin_dir }}/docker-compose"
 
+# IPv4-only resolvers pinned on every VM. IPv6 is disabled (docker role), so any IPv6
+# nameserver from netplan is unreachable at the socket level; systemd-resolved still
+# rotates onto it after an IPv4 timeout and stays there, failing every lookup on the
+# host and in every container (production outage 2026-09-20).
+resolver_upstreams:
+  - 1.1.1.1
+  - 9.9.9.9
+  - 8.8.8.8
+
+# Names the per-host DNS canary resolves every minute (hero2_dns_lookup_success).
+# Each one is a dependency a container reaches through the host resolver.
+dns_check_names:
+  - auth.hero2.org
+  - oauth2.googleapis.com
+  - logs.internal.hero2.org
+  - infra-tile.internal.hero2.org
+
 obsolete_root_paths:
   - /root/.openclaw

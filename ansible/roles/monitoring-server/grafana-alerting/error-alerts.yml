@@ -125,3 +125,81 @@ groups:
           description: "{{ $values.A }} occurrence(s) in the last 5 minutes on {{ $labels.env }}"
         labels:
           severity: critical
+
+      # Pipeline liveness. The paging rules above use noDataState=OK, so a dead log
+      # pipeline (Alloy could not resolve Loki for eleven hours on 2026-09-20) reads
+      # exactly like a quiet day. One rule per env: an env that stops shipping is NoData
+      # for its own query, which is the alert.
+      - uid: log-pipeline-silent-production
+        title: Log pipeline silent (production)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: loki
+            model:
+              editorMode: code
+              expr: 'sum(count_over_time({env="production"}[15m]))'
+              queryType: instant
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+        noDataState: Alerting
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "No production logs reached Loki in 15 minutes"
+          description: "Alloy on the production VM is not delivering (DNS, credentials, Traefik or Loki itself). Error alerts are blind until this recovers."
+        labels:
+          severity: critical
+          notify_resolved: "true"
+          env: production
+
+      # Pipeline liveness. The paging rules above use noDataState=OK, so a dead log
+      # pipeline (Alloy could not resolve Loki for eleven hours on 2026-09-20) reads
+      # exactly like a quiet day. One rule per env: an env that stops shipping is NoData
+      # for its own query, which is the alert.
+      - uid: log-pipeline-silent-staging
+        title: Log pipeline silent (staging)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: loki
+            model:
+              editorMode: code
+              expr: 'sum(count_over_time({env="staging"}[15m]))'
+              queryType: instant
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+        noDataState: Alerting
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "No staging logs reached Loki in 15 minutes"
+          description: "Alloy on the staging VM is not delivering (DNS, credentials, Traefik or Loki itself). Error alerts are blind until this recovers."
+        labels:
+          severity: critical
+          notify_resolved: "true"
+          env: staging

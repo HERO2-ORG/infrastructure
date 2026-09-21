@@ -1,0 +1,6 @@
+# Managed by Ansible (docker role). IPv6 is disabled on this host: never list an IPv6 resolver.
+[Network]
+DNS=
+{% for server in resolver_upstreams %}
+DNS={{ server }}
+{% endfor %}

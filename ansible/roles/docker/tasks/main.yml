@@ -83,3 +83,71 @@
 - name: Apply sysctl (disable IPv6)
   ansible.builtin.command: sysctl --system
   changed_when: false
+
+# With IPv6 disabled above, the provider's IPv6 nameserver that netplan hands to
+# systemd-resolved is unreachable at the socket level (EADDRNOTAVAIL). resolved rotates
+# to the next server on a timeout but never rotates away from a system error, so one
+# IPv4 hiccup parks it on the dead server and every lookup on the host and in every
+# container fails until someone runs `resolvectl dns` by hand (production,
+# 2026-09-20: eleven hours of failed logins, Google sign-in and log shipping).
+# The drop-in replaces the link's DNS list (`DNS=` resets it) and survives netplan
+# regeneration; the runtime call applies it without reconfiguring the link.
+- name: Check the netplan-rendered networkd unit for the primary interface
+  ansible.builtin.stat:
+    path: "/run/systemd/network/10-netplan-{{ ansible_default_ipv4.interface }}.network"
+  register: primary_network_unit
+
+- name: Assert the networkd unit exists (otherwise the DNS drop-in applies to nothing)
+  ansible.builtin.assert:
+    that: primary_network_unit.stat.exists
+    fail_msg: >-
+      /run/systemd/network/10-netplan-{{ ansible_default_ipv4.interface }}.network is missing;
+      the resolver drop-in below would be ignored. Check `networkctl status` and adjust the path.
+
+- name: Ensure networkd drop-in directory exists
+  ansible.builtin.file:
+    path: "/etc/systemd/network/10-netplan-{{ ansible_default_ipv4.interface }}.network.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Pin link DNS to IPv4 upstreams
+  ansible.builtin.template:
+    src: hero2-dns.conf.j2
+    dest: "/etc/systemd/network/10-netplan-{{ ansible_default_ipv4.interface }}.network.d/hero2-dns.conf"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ensure resolved drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Give resolved IPv4 fallback servers
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/hero2.conf
+    content: |
+      # Managed by Ansible (docker role).
+      [Resolve]
+      FallbackDNS={{ resolver_upstreams | join(' ') }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-resolved
+
+- name: Apply the IPv4 resolver list to the live link
+  ansible.builtin.command:
+    argv: "{{ ['resolvectl', 'dns', ansible_default_ipv4.interface] + resolver_upstreams }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify the host resolves a public name
+  ansible.builtin.command:
+    argv: ["getent", "hosts", "auth.hero2.org"]
+  changed_when: false
+  when: not ansible_check_mode
