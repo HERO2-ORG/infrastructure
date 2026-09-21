@@ -62,8 +62,20 @@ report() {
   section "Logs (Loki)"
   echo "### Lines per env, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production"}[24h]))' | rows_or_none
   echo "### Lines per env, last 15m (0 or missing = pipeline dead)"; loki 'sum by (env) (count_over_time({env=~"staging|production"}[15m]))' | rows_or_none
-  echo "### Backend-origin error types, last 24h"; loki 'sum by (errorType, env) (count_over_time({env=~"staging|production", source!="flutter"} | json level, errorType | level =~ "error|50" | errorType != "" [24h]))' | rows_or_none
-  echo "### Backend HTTP 5xx responses, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production", service="backend"} | json | res_statusCode >= 500 [24h]))' | rows_or_none
+  # Report every line carrying an errorType and let the level be a column. Requiring
+  # level=~"error|50" as well hid a real fault for as long as it has been happening:
+  # syncTripToFact logs its Prisma failures at warn, so 13 dropped trip-fact writes
+  # were reported as "none" while production silently lost them.
+  echo "### Backend-origin error types, last 24h"; loki 'sum by (errorType, level, env) (count_over_time({env=~"staging|production", source!="flutter"} | json errorType | errorType != "" [24h]))' | rows_or_none
+  # Nothing logs HTTP status today: the backend has no request logger and Traefik's
+  # access log is off, so res_statusCode is absent from every line and this check can
+  # only ever print "none". Say that rather than implying a clean bill of health.
+  echo "### Backend HTTP 5xx responses, last 24h"
+  if [ -z "$(loki 'sum(count_over_time({env=~"staging|production", service="backend"} | json | res_statusCode != "" [24h]))')" ]; then
+    echo "- NO DATA SOURCE: no backend log line carries res_statusCode (HTTP request logging is disabled), so this check cannot see 5xx at all"
+  else
+    loki 'sum by (env) (count_over_time({env=~"staging|production", service="backend"} | json | res_statusCode >= 500 [24h]))' | rows_or_none
+  fi
   echo "### Keycloak identity-provider login errors, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production", container="hero2_keycloak"} |= "IDENTITY_PROVIDER_LOGIN_ERROR" [24h]))' | rows_or_none
 
   section "Hosts"
