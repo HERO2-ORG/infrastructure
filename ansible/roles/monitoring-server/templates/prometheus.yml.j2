@@ -78,6 +78,9 @@ scrape_configs:
 {% for probe in monitoring_http_probes %}
   - job_name: blackbox_{{ probe.name }}
     metrics_path: /probe
+{% if probe.scrape_interval is defined %}
+    scrape_interval: {{ probe.scrape_interval }}
+{% endif %}
     params:
       module:
         - {{ probe.module }}
