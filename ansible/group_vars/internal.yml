@@ -35,16 +35,23 @@ monitoring_http_probes:
     service: backend
     target: https://api.hero2.org/health
     module: http_2xx
+  # Every scrape makes Keycloak log a REFRESH_TOKEN_ERROR warn, so the global 15s
+  # interval costs 5,760 auth-log lines per env per day: more than production logs
+  # in total, and enough to bury a real user's failed token refresh. PublicEndpointDown
+  # needs 10m of continuous failure, so a 60s interval still gives it ten samples and
+  # delays detection by at most one scrape.
   - name: staging-auth-refresh
     env: staging
     service: backend
     target: https://api.dev.hero2.org/auth/refresh
     module: http_auth_refresh_401
+    scrape_interval: 60s
   - name: production-auth-refresh
     env: production
     service: backend
     target: https://api.hero2.org/auth/refresh
     module: http_auth_refresh_401
+    scrape_interval: 60s
   - name: staging-keycloak
     env: staging
     service: keycloak
