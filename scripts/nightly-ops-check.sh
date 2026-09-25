@@ -48,8 +48,15 @@ report() {
     | jq -r '.[]? | "\(.labels.alertname) [\(.labels.env // "-")] since \(.startsAt): \(.annotations.description // .annotations.summary // "")"' | rows_or_none
 
   section "Prometheus signals"
-  echo "### Probes failing"; prom 'probe_success{job=~"blackbox_.*"} == 0' | rows_or_none
-  echo "### Host DNS lookups failing"; prom 'hero2_dns_lookup_success == 0' | rows_or_none
+  # Both of these are point-in-time: a probe or a lookup that failed for a few minutes
+  # and recovered is back at 1 by the time the report runs, so the instant check alone
+  # prints "none" for a bad night. On 2026-09-22 it did exactly that while nine probe
+  # samples and nine canary minutes had failed inside the window. Report the 24h dips
+  # next to the current state; deploys show up here as small counts and are expected.
+  echo "### Probes failing now"; prom 'probe_success{job=~"blackbox_.*"} == 0' | rows_or_none
+  echo "### Probes that dipped in the last 24h (failed samples)"; prom 'count_over_time((probe_success{job=~"blackbox_.*"} == 0)[24h:1m])' | rows_or_none
+  echo "### Host DNS lookups failing now"; prom 'hero2_dns_lookup_success == 0' | rows_or_none
+  echo "### Host DNS lookups that failed in the last 24h (failed minutes)"; prom 'count_over_time((hero2_dns_lookup_success == 0)[24h:1m])' | rows_or_none
   echo "### Containers restart-looping (starts in 30m > 3)"; prom 'count by (name, env) (last_over_time(container_start_time_seconds{name!=""}[30m])) > 3' | rows_or_none
   echo "### BullMQ failed sets"; prom 'redis_key_size{job="redis_bullmq",key=~"bull:.*:failed"} > 0' | rows_or_none
   echo "### Scrape targets down"; prom 'up == 0' | rows_or_none
