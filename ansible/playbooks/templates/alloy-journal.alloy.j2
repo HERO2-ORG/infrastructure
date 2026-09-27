@@ -1,0 +1,81 @@
+// Host systemd journal (systemd-resolved, sshd, kernel, timers, fwupd, ...). Included
+// by every host's Alloy config; the including file must define `loki.write "loki"`.
+//
+// Streams carry job="systemd-journal" and no `container` label, which is how queries
+// that mean "application logs" (the log-pipeline-silent alerts, the nightly report's
+// volume rows) keep excluding them.
+loki.relabel "journal" {
+  forward_to = []
+
+  // The backend stack logs through Docker's journald driver, so every container line
+  // is also a journal entry. loki.source.docker already ships those (with the
+  // container/service labels and JSON level promotion the alerts rely on); shipping
+  // them again here would duplicate them, and stderr would arrive as level="error".
+  rule {
+    source_labels = ["__journal_container_id"]
+    regex         = ".+"
+    action        = "drop"
+  }
+
+  // Notice and above from every unit, plus everything systemd-resolved says: its DNS
+  // server switches and feature-set downgrades are logged at info, and those are the
+  // only trace an upstream stall leaves.
+  rule {
+    source_labels = ["__journal_priority", "__journal__systemd_unit"]
+    separator     = ";"
+    regex         = "[0-5];.*|[0-7];systemd-resolved\\.service"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  // Per-login and transient units get a fresh name every time; collapse them so each
+  // ssh session or docker mount does not open a new stream.
+  rule {
+    source_labels = ["unit"]
+    regex         = "(session)-[0-9]+\\.scope|(run)-.+|(user)@[0-9]+\\.service"
+    target_label  = "unit"
+    replacement   = "$1$2$3-*"
+  }
+
+  rule {
+    source_labels = ["__journal__transport"]
+    regex         = "kernel"
+    target_label  = "unit"
+    replacement   = "kernel"
+  }
+
+  rule {
+    source_labels = ["__journal_syslog_identifier"]
+    target_label  = "identifier"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+loki.source.journal "host" {
+  path          = "/var/log/journal"
+  max_age       = "12h"
+  relabel_rules = loki.relabel.journal.rules
+  forward_to    = [loki.process.journal.receiver]
+  labels        = {
+    env = "{{ app_environment }}",
+    job = "systemd-journal",
+  }
+}
+
+loki.process "journal" {
+  forward_to = [loki.write.loki.receiver]
+
+  // UFW logs every dropped internet packet to the kernel ring at warning level; on a
+  // public VPS that is most of the journal and carries nothing actionable.
+  stage.drop {
+    expression = "\\[UFW (BLOCK|ALLOW|AUDIT)\\]"
+  }
+}

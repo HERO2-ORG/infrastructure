@@ -130,6 +130,9 @@ groups:
       # pipeline (Alloy could not resolve Loki for eleven hours on 2026-09-20) reads
       # exactly like a quiet day. One rule per env: an env that stops shipping is NoData
       # for its own query, which is the alert.
+      # Scoped to container logs (container!=""): the host journal ships through the
+      # same Alloy but a separate source, and journal lines alone must not keep this
+      # green while the docker source is broken.
       - uid: log-pipeline-silent-production
         title: Log pipeline silent (production)
         condition: C
@@ -141,7 +144,7 @@ groups:
             datasourceUid: loki
             model:
               editorMode: code
-              expr: 'sum(count_over_time({env="production"}[15m]))'
+              expr: 'sum(count_over_time({env="production", container!=""}[15m]))'
               queryType: instant
               refId: A
           - refId: C
@@ -180,7 +183,7 @@ groups:
             datasourceUid: loki
             model:
               editorMode: code
-              expr: 'sum(count_over_time({env="staging"}[15m]))'
+              expr: 'sum(count_over_time({env="staging", container!=""}[15m]))'
               queryType: instant
               refId: A
           - refId: C

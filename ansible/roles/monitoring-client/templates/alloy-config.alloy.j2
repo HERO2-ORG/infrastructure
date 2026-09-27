@@ -66,6 +66,8 @@ loki.process "pipeline" {
   }
 }
 
+{% include 'alloy-journal.alloy.j2' %}
+
 loki.write "loki" {
   endpoint {
     url = "https://{{ loki_domain }}/loki/api/v1/push"

@@ -43,15 +43,17 @@ services:
           cpus: "0.75"
     restart: unless-stopped
 
-  # Tails Docker container stdout/stderr and ships structured JSON logs to Loki
-  # on the internal VM. Uses Docker SD discovery so new containers are picked up
-  # automatically without an Alloy restart.
+  # Tails Docker container stdout/stderr and the host systemd journal and ships both
+  # to Loki on the internal VM. Uses Docker SD discovery so new containers are picked
+  # up automatically without an Alloy restart.
   alloy:
     image: {{ alloy_image }}
     command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/tmp/alloy /etc/alloy/config.alloy
     volumes:
       - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log/journal:/var/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
       - /tmp/alloy:/tmp/alloy
     restart: unless-stopped
 
