@@ -53,6 +53,8 @@
       dest: grafana-dashboards.yml
     - src: loki-config.yml.j2
       dest: loki-config.yml
+    - src: alloy-config.alloy.j2
+      dest: alloy-config.alloy
   no_log: "{{ item.dest == 'alertmanager.yml' }}"
   notify: Restart monitoring stack
 
@@ -111,7 +113,8 @@
   notify: Restart monitoring stack
 
 # Container runtime UIDs from the upstream images: prom/* run as nobody (65534),
-# grafana/grafana runs as 472, loki runs as 10001.
+# grafana/grafana runs as 472, loki runs as 10001, alloy runs as root (it reads the
+# host journal).
 # Bind-mounted host dirs must be writable by these UIDs.
 - name: Ensure persistent volume directories are writable by their container users
   ansible.builtin.file:
@@ -125,6 +128,7 @@
     - { name: alertmanager, uid: "65534" }
     - { name: grafana, uid: "472" }
     - { name: loki, uid: "10001" }
+    - { name: alloy, uid: "0" }
   notify: Restart monitoring stack
 
 - name: Copy daily report script

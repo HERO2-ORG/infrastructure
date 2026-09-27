@@ -67,8 +67,8 @@ report() {
     | jq -r '.data.groups[]?.rules[]? | "\(.name): state=\(.state) health=\(.health)\(if .lastError then " lastError=" + .lastError else "" end)"' | rows_or_none
 
   section "Logs (Loki)"
-  echo "### Lines per env, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production"}[24h]))' | rows_or_none
-  echo "### Lines per env, last 15m (0 or missing = pipeline dead)"; loki 'sum by (env) (count_over_time({env=~"staging|production"}[15m]))' | rows_or_none
+  echo "### Lines per env, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production", container!=""}[24h]))' | rows_or_none
+  echo "### Lines per env, last 15m (0 or missing = pipeline dead)"; loki 'sum by (env) (count_over_time({env=~"staging|production", container!=""}[15m]))' | rows_or_none
   # Report every line carrying an errorType and let the level be a column. Requiring
   # level=~"error|50" as well hid a real fault for as long as it has been happening:
   # syncTripToFact logs its Prisma failures at warn, so 13 dropped trip-fact writes
@@ -84,6 +84,9 @@ report() {
     loki 'sum by (env) (count_over_time({env=~"staging|production", service="backend"} | json | res_statusCode >= 500 [24h]))' | rows_or_none
   fi
   echo "### Keycloak identity-provider login errors, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production", container="hero2_keycloak"} |= "IDENTITY_PROVIDER_LOGIN_ERROR" [24h]))' | rows_or_none
+  echo "### Host journal lines per env, last 24h (missing env = journal not shipping)"; loki 'sum by (env) (count_over_time({job="systemd-journal"}[24h]))' | rows_or_none
+  echo "### Host journal errors and worse, last 24h"; loki 'sum by (env, unit) (count_over_time({job="systemd-journal", level=~"emerg|alert|crit|error"}[24h]))' | rows_or_none
+  echo "### systemd-resolved messages, last 24h (server switches, degraded feature sets)"; loki 'sum by (env) (count_over_time({job="systemd-journal", unit="systemd-resolved.service"}[24h]))' | rows_or_none
 
   section "Hosts"
   for h in "${HOSTS[@]}"; do

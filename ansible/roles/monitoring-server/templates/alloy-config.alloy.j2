@@ -1,0 +1,9 @@
+// The internal VM ships only its host journal: Loki runs next to it on the compose
+// default network, so it pushes directly without the public TLS + basic-auth route.
+{% include 'alloy-journal.alloy.j2' %}
+
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:{{ loki_port }}/loki/api/v1/push"
+  }
+}
