@@ -32,9 +32,11 @@ prom() {  # prom "<expr>" -> rows "labels<TAB>value"
     | jq -r '.data.result[]? | [(.metric | del(.__name__, .job) | to_entries | map("\(.key)=\(.value)") | join(" ")), .value[1]] | @tsv'
 }
 
-loki() {  # loki "<logql>" -> rows "labels<TAB>value"
-  "${SSH[@]}" "$INTERNAL" "docker exec monitoring-loki-1 wget -qO- 'http://localhost:3100/loki/api/v1/query?query=$(urlenc "$1")'" 2>/dev/null \
-    | jq -r '.data.result[]? | [(.metric | to_entries | map("\(.key)=\(.value)") | join(" ")), .value[1]] | @tsv'
+loki() {  # loki "<logql>" -> rows "labels<TAB>value", or "QUERY FAILED" so an unreachable Loki never reads as "none"
+  local body
+  body="$("${SSH[@]}" "$INTERNAL" "docker exec monitoring-loki-1 wget -qO- 'http://localhost:3100/loki/api/v1/query?query=$(urlenc "$1")'" 2>/dev/null)"
+  if [ "$(jq -r '.status' <<<"$body" 2>/dev/null)" != "success" ]; then echo "QUERY FAILED"; return; fi
+  jq -r '.data.result[] | [(.metric | to_entries | map("\(.key)=\(.value)") | join(" ")), .value[1]] | @tsv' <<<"$body"
 }
 
 section() { printf '\n## %s\n\n' "$1"; }
@@ -74,15 +76,23 @@ report() {
   # syncTripToFact logs its Prisma failures at warn, so 13 dropped trip-fact writes
   # were reported as "none" while production silently lost them.
   echo "### Backend-origin error types, last 24h"; loki 'sum by (errorType, level, env) (count_over_time({env=~"staging|production", source!="flutter"} | json errorType | errorType != "" [24h]))' | rows_or_none
-  # Nothing logs HTTP status today: the backend has no request logger and Traefik's
-  # access log is off, so res_statusCode is absent from every line and this check can
-  # only ever print "none". Say that rather than implying a clean bill of health.
-  echo "### Backend HTTP 5xx responses, last 24h"
-  if [ -z "$(loki 'sum(count_over_time({env=~"staging|production", service="backend"} | json | res_statusCode != "" [24h]))')" ]; then
-    echo "- NO DATA SOURCE: no backend log line carries res_statusCode (HTTP request logging is disabled), so this check cannot see 5xx at all"
-  else
-    loki 'sum by (env) (count_over_time({env=~"staging|production", service="backend"} | json | res_statusCode >= 500 [24h]))' | rows_or_none
+  # The backend logs one line per response (res.statusCode, req.path); healthchecks and
+  # the auth canary are left out unless they 5xx. An env with no such line either had no
+  # real request all day or has request logging broken/undeployed; say so instead of
+  # letting it read as "no failures".
+  local http_sel='{env=~"staging|production", service="backend"} | json status="res.statusCode", path="req.path" | status != ""'
+  echo "### Backend HTTP responses by status class, last 24h"
+  local classes; classes="$(loki "sum by (env, class) (count_over_time($http_sel | label_format class=\`{{ substr 0 1 .status }}xx\` [24h]))")"
+  printf '%s\n' "$classes" | sed '/^$/d' | sort | rows_or_none
+  if [ "$classes" != "QUERY FAILED" ]; then
+    for env in staging production; do
+      printf '%s\n' "$classes" | grep -qE "env=$env([[:space:]]|$)" || echo "- NO RESPONSES ($env): no non-probe request logged in 24h; either no traffic or request logging is broken/not deployed there"
+    done
   fi
+  echo "### Backend HTTP 5xx by route, last 24h"
+  loki "topk(10, sum by (env, status, path) (count_over_time($http_sel | status >= 500 [24h])))" | rows_or_none
+  echo "### Backend HTTP 4xx by route, last 24h (top 10)"
+  loki "topk(10, sum by (env, status, path) (count_over_time($http_sel | status >= 400 | status < 500 [24h])))" | rows_or_none
   echo "### Keycloak identity-provider login errors, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production", container="hero2_keycloak"} |= "IDENTITY_PROVIDER_LOGIN_ERROR" [24h]))' | rows_or_none
   echo "### Host journal lines per env, last 24h (missing env = journal not shipping)"; loki 'sum by (env) (count_over_time({job="systemd-journal"}[24h]))' | rows_or_none
   echo "### Host journal errors and worse, last 24h"; loki 'sum by (env, unit) (count_over_time({job="systemd-journal", level=~"emerg|alert|crit|error"}[24h]))' | rows_or_none
