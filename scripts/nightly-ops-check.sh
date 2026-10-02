@@ -75,7 +75,7 @@ report() {
   # were reported as "none" while production silently lost them.
   echo "### Backend-origin error types, last 24h"; loki 'sum by (errorType, level, env) (count_over_time({env=~"staging|production", source!="flutter"} | json errorType | errorType != "" [24h]))' | rows_or_none
   # The backend logs one line per response (res.statusCode, req.path); healthchecks and
-  # blackbox probes are left out unless they 5xx. An env with no such line has request
+  # the auth canary are left out unless they 5xx. An env with no such line has request
   # logging broken or undeployed, which must not read as "no failures".
   local http_sel='{env=~"staging|production", service="backend"} | json status="res.statusCode", path="req.path" | status != ""'
   echo "### Backend HTTP responses by status class, last 24h"
