@@ -74,15 +74,20 @@ report() {
   # syncTripToFact logs its Prisma failures at warn, so 13 dropped trip-fact writes
   # were reported as "none" while production silently lost them.
   echo "### Backend-origin error types, last 24h"; loki 'sum by (errorType, level, env) (count_over_time({env=~"staging|production", source!="flutter"} | json errorType | errorType != "" [24h]))' | rows_or_none
-  # Nothing logs HTTP status today: the backend has no request logger and Traefik's
-  # access log is off, so res_statusCode is absent from every line and this check can
-  # only ever print "none". Say that rather than implying a clean bill of health.
-  echo "### Backend HTTP 5xx responses, last 24h"
-  if [ -z "$(loki 'sum(count_over_time({env=~"staging|production", service="backend"} | json | res_statusCode != "" [24h]))')" ]; then
-    echo "- NO DATA SOURCE: no backend log line carries res_statusCode (HTTP request logging is disabled), so this check cannot see 5xx at all"
-  else
-    loki 'sum by (env) (count_over_time({env=~"staging|production", service="backend"} | json | res_statusCode >= 500 [24h]))' | rows_or_none
-  fi
+  # The backend logs one line per response (res.statusCode, req.path); healthchecks and
+  # blackbox probes are left out unless they 5xx. An env with no such line has request
+  # logging broken or undeployed, which must not read as "no failures".
+  local http_sel='{env=~"staging|production", service="backend"} | json status="res.statusCode", path="req.path" | status != ""'
+  echo "### Backend HTTP responses by status class, last 24h"
+  local classes; classes="$(loki "sum by (env, class) (count_over_time($http_sel | label_format class=\`{{ substr 0 1 .status }}xx\` [24h]))")"
+  printf '%s\n' "$classes" | sed '/^$/d' | sort | rows_or_none
+  for env in staging production; do
+    printf '%s\n' "$classes" | grep -qE "env=$env([[:space:]]|$)" || echo "- NO DATA SOURCE ($env): no backend response line in 24h, request logging is broken or not deployed there"
+  done
+  echo "### Backend HTTP 5xx by route, last 24h"
+  loki "topk(10, sum by (env, status, path) (count_over_time($http_sel | status >= 500 [24h])))" | rows_or_none
+  echo "### Backend HTTP 4xx by route, last 24h (top 10)"
+  loki "topk(10, sum by (env, status, path) (count_over_time($http_sel | status >= 400 | status < 500 [24h])))" | rows_or_none
   echo "### Keycloak identity-provider login errors, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production", container="hero2_keycloak"} |= "IDENTITY_PROVIDER_LOGIN_ERROR" [24h]))' | rows_or_none
   echo "### Host journal lines per env, last 24h (missing env = journal not shipping)"; loki 'sum by (env) (count_over_time({job="systemd-journal"}[24h]))' | rows_or_none
   echo "### Host journal errors and worse, last 24h"; loki 'sum by (env, unit) (count_over_time({job="systemd-journal", level=~"emerg|alert|crit|error"}[24h]))' | rows_or_none
