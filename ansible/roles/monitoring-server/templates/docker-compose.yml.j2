@@ -1,3 +1,11 @@
+# json-file is unbounded by default: by 2026-10 Loki's own log alone held 7 GB on the
+# internal VM, the host whose disk is already the fleet's tightest.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 networks:
   edge:
     external: true
@@ -26,6 +34,7 @@ services:
     networks:
       - edge
     restart: unless-stopped
+    logging: *default-logging
 
   prometheus:
     image: {{ prometheus_image }}
@@ -39,6 +48,7 @@ services:
       - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       - ./volumes/prometheus:/prometheus
     restart: unless-stopped
+    logging: *default-logging
 
   alertmanager:
     image: {{ alertmanager_image }}
@@ -49,6 +59,7 @@ services:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./volumes/alertmanager:/alertmanager
     restart: unless-stopped
+    logging: *default-logging
 
   blackbox-exporter:
     image: {{ blackbox_exporter_image }}
@@ -57,6 +68,7 @@ services:
     volumes:
       - ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     restart: unless-stopped
+    logging: *default-logging
 
   loki:
     image: {{ loki_image }}
@@ -79,6 +91,7 @@ services:
       - default
       - edge
     restart: unless-stopped
+    logging: *default-logging
 
   grafana:
     image: {{ grafana_image }}
@@ -105,6 +118,7 @@ services:
       - default
       - edge
     restart: unless-stopped
+    logging: *default-logging
 
   alloy:
     image: {{ alloy_image }}
@@ -115,6 +129,7 @@ services:
       - /etc/machine-id:/etc/machine-id:ro
       - ./volumes/alloy:/var/lib/alloy
     restart: unless-stopped
+    logging: *default-logging
 
   node-exporter:
     image: {{ node_exporter_image }}
@@ -124,6 +139,7 @@ services:
     volumes:
       - /:/host:ro,rslave
     restart: unless-stopped
+    logging: *default-logging
 
   cadvisor:
     image: {{ cadvisor_image }}
@@ -146,3 +162,4 @@ services:
         limits:
           cpus: "0.75"
     restart: unless-stopped
+    logging: *default-logging
