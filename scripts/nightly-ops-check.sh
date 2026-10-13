@@ -81,6 +81,10 @@ report() {
   # real request all day or has request logging broken/undeployed; say so instead of
   # letting it read as "no failures".
   local http_sel='{env=~"staging|production", service="backend"} | json status="res.statusCode", path="req.path" | status != ""'
+  # Loki refuses a query that builds more than 500 series. Id segments are folded into
+  # :id, and 404s are only counted: one scanner sweep probes hundreds of made-up paths
+  # (/.env, /phpinfo.php, ...) and alone pushed the per-route query over the limit.
+  local route_sel="$http_sel"' | label_format path=`{{ regexReplaceAll "/[0-9a-fA-F-]{8,}|/[0-9]+" .path "/:id" }}`'
   echo "### Backend HTTP responses by status class, last 24h"
   local classes; classes="$(loki "sum by (env, class) (count_over_time($http_sel | label_format class=\`{{ substr 0 1 .status }}xx\` [24h]))")"
   printf '%s\n' "$classes" | sed '/^$/d' | sort | rows_or_none
@@ -90,9 +94,11 @@ report() {
     done
   fi
   echo "### Backend HTTP 5xx by route, last 24h"
-  loki "topk(10, sum by (env, status, path) (count_over_time($http_sel | status >= 500 [24h])))" | rows_or_none
-  echo "### Backend HTTP 4xx by route, last 24h (top 10)"
-  loki "topk(10, sum by (env, status, path) (count_over_time($http_sel | status >= 400 | status < 500 [24h])))" | rows_or_none
+  loki "topk(10, sum by (env, status, path) (count_over_time($route_sel | status >= 500 [24h])))" | rows_or_none
+  echo "### Backend HTTP 4xx by status, last 24h"
+  loki "sum by (env, status) (count_over_time($http_sel | status >= 400 | status < 500 [24h]))" | rows_or_none
+  echo "### Backend HTTP 4xx by route except 404, last 24h (top 10)"
+  loki "topk(10, sum by (env, status, path) (count_over_time($route_sel | status >= 400 | status < 500 | status != 404 [24h])))" | rows_or_none
   echo "### Keycloak identity-provider login errors, last 24h"; loki 'sum by (env) (count_over_time({env=~"staging|production", container="hero2_keycloak"} |= "IDENTITY_PROVIDER_LOGIN_ERROR" [24h]))' | rows_or_none
   echo "### Host journal lines per env, last 24h (missing env = journal not shipping)"; loki 'sum by (env) (count_over_time({job="systemd-journal"}[24h]))' | rows_or_none
   echo "### Host journal errors and worse, last 24h"; loki 'sum by (env, unit) (count_over_time({job="systemd-journal", level=~"emerg|alert|crit|error"}[24h]))' | rows_or_none
