@@ -5,10 +5,25 @@
     checksum: "sha256:{{ restic_sha256[ansible_facts.architecture] }}"
     mode: "0644"
 
+- name: Install bzip2 to unpack restic
+  ansible.builtin.apt:
+    name: bzip2
+    state: present
+
+# Trusts only a binary that runs: an unpack that once failed halfway left an
+# empty file that a plain `creates:` would have kept forever.
 - name: Unpack restic
   ansible.builtin.shell:
-    cmd: "bunzip2 -c /usr/local/lib/restic-{{ restic_version }}.bz2 > /usr/local/bin/restic-{{ restic_version }} && chmod 0755 /usr/local/bin/restic-{{ restic_version }}"
-    creates: "/usr/local/bin/restic-{{ restic_version }}"
+    cmd: |
+      bin=/usr/local/bin/restic-{{ restic_version }}
+      "$bin" version >/dev/null 2>&1 && exit 0
+      bunzip2 -c /usr/local/lib/restic-{{ restic_version }}.bz2 > "$bin.tmp"
+      chmod 0755 "$bin.tmp"
+      mv "$bin.tmp" "$bin"
+      echo unpacked
+  register: restic_unpack
+  changed_when: "'unpacked' in restic_unpack.stdout"
+  when: not ansible_check_mode
 
 # Check mode neither downloads nor unpacks, so there is nothing to link to yet.
 - name: Point restic at the pinned version
