@@ -1,0 +1,74 @@
+# promtool unit tests for the backup alerts; run by alerts.sh against the
+# rendered alert-rules template.
+rule_files:
+  - rules.yml
+evaluation_interval: 1m
+tests:
+  - name: a backup that stops reporting for more than 26 hours fires
+    interval: 1m
+    input_series:
+      - series: 'hero2_backup_last_success_timestamp_seconds{env="staging",instance="s"}'
+        values: '0x1700'
+      - series: 'hero2_backup_last_success_timestamp_seconds{env="production",instance="p"}'
+        values: '97000x1700'
+    alert_rule_test:
+      - eval_time: 27h
+        alertname: BackupMissing
+        exp_alerts:
+          - exp_labels: {severity: critical, notify_resolved: "true", env: staging, instance: s}
+            exp_annotations:
+              summary: "No successful backup in over a day"
+              description: "staging has gone 1d 3h 0m 0s without a complete backup. Check `journalctl -u hero2-backup` on the app VM."
+
+  - name: an environment that never reported fires after a day
+    interval: 1m
+    input_series:
+      - series: 'hero2_backup_last_success_timestamp_seconds{env="staging",instance="s"}'
+        values: '0x1700'
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: BackupNeverReported
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: BackupNeverReported
+        exp_alerts:
+          - exp_labels: {severity: critical, notify_resolved: "true", env: production}
+            exp_annotations:
+              summary: "An environment has never reported a backup"
+              description: "production has no backup metric at all. Check that hero2-backup.timer is enabled on its VM and that node-exporter reads /var/lib/node-exporter."
+
+  - name: a failed nightly run warns
+    interval: 1m
+    input_series:
+      - series: 'hero2_backup_last_run_success{env="production",instance="p"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BackupFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, notify_resolved: "true", env: production, instance: p}
+            exp_annotations:
+              summary: "Last night's backup failed"
+              description: "The latest backup run on production failed; the previous snapshot is still the newest. Check `journalctl -u hero2-backup` on the app VM."
+
+  - name: a failed restore test or check fires, a passing one does not
+    interval: 1m
+    input_series:
+      - series: 'hero2_backup_restore_test_success{env="production",instance="i"}'
+        values: '0x20'
+      - series: 'hero2_backup_restore_test_success{env="staging",instance="i"}'
+        values: '1x20'
+      - series: 'hero2_backup_check_success{env="staging",instance="i"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BackupUnusable
+        exp_alerts:
+          - exp_labels: {severity: critical, notify_resolved: "true", env: production, instance: i}
+            exp_annotations:
+              summary: "A backup failed its restore test or data check"
+              description: "The production backups could not be restored or failed `restic check`. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+          - exp_labels: {severity: critical, notify_resolved: "true", env: staging, instance: i}
+            exp_annotations:
+              summary: "A backup failed its restore test or data check"
+              description: "The staging backups could not be restored or failed `restic check`. Check `journalctl -u hero2-backup-maintain` on the internal VM."

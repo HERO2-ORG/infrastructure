@@ -177,3 +177,56 @@ groups:
 {% raw %}
           description: "{{ $labels.env }}: bull:sensor_compaction:wait has {{ $value }} pending jobs older than an hour. The scheduled compaction worker (cron 0 10 * * * UTC) is queueing jobs but the worker is not draining them. Check backend startup logs."
 {% endraw %}
+
+  # Nightly backups (roles backup-client and backup-server). The app VMs report
+  # when every part of a backup last succeeded; the internal VM reports its
+  # prune, data check and restore test.
+  - name: backups
+    rules:
+      - alert: BackupMissing
+        expr: time() - hero2_backup_last_success_timestamp_seconds > 26 * 3600
+        for: 30m
+        labels:
+          severity: critical
+          notify_resolved: "true"
+        annotations:
+          summary: "No successful backup in over a day"
+{% raw %}
+          description: "{{ $labels.env }} has gone {{ $value | humanizeDuration }} without a complete backup. Check `journalctl -u hero2-backup` on the app VM."
+{% endraw %}
+
+      - alert: BackupNeverReported
+        expr: absent(hero2_backup_last_success_timestamp_seconds{env="staging"}) or absent(hero2_backup_last_success_timestamp_seconds{env="production"})
+        for: 26h
+        labels:
+          severity: critical
+          notify_resolved: "true"
+        annotations:
+          summary: "An environment has never reported a backup"
+{% raw %}
+          description: "{{ $labels.env }} has no backup metric at all. Check that hero2-backup.timer is enabled on its VM and that node-exporter reads /var/lib/node-exporter."
+{% endraw %}
+
+      - alert: BackupFailed
+        expr: hero2_backup_last_run_success == 0
+        for: 5m
+        labels:
+          severity: warning
+          notify_resolved: "true"
+        annotations:
+          summary: "Last night's backup failed"
+{% raw %}
+          description: "The latest backup run on {{ $labels.env }} failed; the previous snapshot is still the newest. Check `journalctl -u hero2-backup` on the app VM."
+{% endraw %}
+
+      - alert: BackupUnusable
+        expr: hero2_backup_restore_test_success == 0 or hero2_backup_check_success == 0
+        for: 5m
+        labels:
+          severity: critical
+          notify_resolved: "true"
+        annotations:
+          summary: "A backup failed its restore test or data check"
+{% raw %}
+          description: "The {{ $labels.env }} backups could not be restored or failed `restic check`. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+{% endraw %}

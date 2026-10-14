@@ -20,6 +20,7 @@ This repo owns VM topology, Ansible platform roles, shared GitHub composite acti
 - [Platform architecture](docs/platform-architecture.md)
 - [Operations](docs/operations.md)
 - [Monitoring](docs/monitoring.md)
+- [Backups](docs/backups.md)
 - [Shared CI actions and config](docs/shared-ci.md)
 - [Development workflow](WORKFLOW.md)
 

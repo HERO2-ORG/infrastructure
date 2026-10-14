@@ -9,15 +9,21 @@ roles="$here/../../ansible/roles"
 net=hero2-backup-test
 pass=0
 fail=0
+log="$(mktemp)"
+# Steps write their output to $log; a failing check prints it.
 check() {
-  if [ "$2" = 0 ]; then pass=$((pass + 1)); echo "PASS  $1"; else fail=$((fail + 1)); echo "FAIL  $1"; fi
+  if [ "$2" = 0 ]; then
+    pass=$((pass + 1)); echo "PASS  $1"
+  else
+    fail=$((fail + 1)); echo "FAIL  $1"; sed 's/^/      /' "$log" | tail -30
+  fi
 }
 cleanup() {
   docker rm -f hbt-rest hbt-runner hbt-pg hbt-kc hero2-restore-staging >/dev/null 2>&1 || true
   docker volume rm -f hbt-repos hbt-tls hbt-metrics hbt-minio >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT
+trap 'cleanup; rm -f "$log"' EXIT
 cleanup
 
 docker build -q -t hero2-backup-runner "$here" >/dev/null
@@ -32,8 +38,7 @@ for svc in postgres:hbt-pg keycloak-db:hbt-kc; do
     -e POSTGRES_USER=hero2 -e POSTGRES_PASSWORD=x -e POSTGRES_DB=hero2 postgres:17 >/dev/null
 done
 for c in hbt-pg hbt-kc; do
-  until docker exec "$c" pg_isready -U hero2 -d hero2 >/dev/null 2>&1; do sleep 1; done
-  sleep 2
+  until docker exec "$c" pg_isready -h 127.0.0.1 -U hero2 -d hero2 >/dev/null 2>&1; do sleep 1; done
   docker exec "$c" psql -U hero2 -d hero2 -qc 'create table "AuthUser" (id int); insert into "AuthUser" values (1);'
 done
 
@@ -65,11 +70,11 @@ runner 'shellcheck /roles/backup-client/files/hero2-backup.sh /roles/backup-serv
 check "shellcheck is clean" $?
 runner 'echo photo > /minio/logo.png'
 
-runner /roles/backup-client/files/hero2-backup.sh >/dev/null 2>&1; check "first run initializes the repository and backs up" $?
+runner /roles/backup-client/files/hero2-backup.sh >"$log" 2>&1; check "first run initializes the repository and backs up" $?
 first="$(metric hero2_backup.prom hero2_backup_last_success_timestamp_seconds)"
 [ -n "$first" ]; check "first run records a success time" $?
 sleep 1
-runner /roles/backup-client/files/hero2-backup.sh >/dev/null 2>&1; check "second run reuses the repository" $?
+runner /roles/backup-client/files/hero2-backup.sh >"$log" 2>&1; check "second run reuses the repository" $?
 second="$(metric hero2_backup.prom hero2_backup_last_success_timestamp_seconds)"
 [ -n "$second" ] && [ "$second" -gt "$first" ]; check "second run moves the success time forward" $?
 count="$(runner 'restic snapshots --json' | grep -o '"short_id"' | wc -l | tr -d ' ')"
@@ -85,11 +90,11 @@ check "a run with the database down fails" $rc
 [ "$(metric hero2_backup.prom hero2_backup_last_success_timestamp_seconds)" = "$second" ]; check "the failed run keeps the last success time" $?
 docker start hbt-pg >/dev/null
 
-runner /roles/backup-server/files/hero2-backup-maintain.sh >/dev/null 2>&1; check "maintenance run succeeds" $?
+runner /roles/backup-server/files/hero2-backup-maintain.sh >"$log" 2>&1; check "maintenance run succeeds" $?
 [ "$(metric hero2_backup_restore_staging.prom hero2_backup_restore_test_success)" = 1 ]; check "the restore test loads the dump and finds the users" $?
 
 runner 'pack=$(find /repos/staging/data -type f | head -1); printf garbage > "$pack"'
-BACKUP_FORCE_CHECK=1 runner 'BACKUP_FORCE_CHECK=1 /roles/backup-server/files/hero2-backup-maintain.sh' >/dev/null 2>&1 && rc=1 || rc=0
+BACKUP_FORCE_CHECK=1 runner 'BACKUP_FORCE_CHECK=1 /roles/backup-server/files/hero2-backup-maintain.sh' >"$log" 2>&1 && rc=1 || rc=0
 check "a damaged repository fails maintenance" $rc
 [ "$(metric hero2_backup_check_staging.prom hero2_backup_check_success)" = 0 ]; check "the damaged repository is reported" $?
 

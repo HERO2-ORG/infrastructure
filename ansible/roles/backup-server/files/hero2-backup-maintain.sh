@@ -32,11 +32,17 @@ restore_test() {
   trap 'docker rm -f "$name" >/dev/null 2>&1; rm -rf "$dir"' RETURN
   restic dump latest --tag postgres postgres.dump > "${dir}/app.dump" || return 1
   docker run -d --rm --name "$name" -e POSTGRES_PASSWORD=restore-test postgres:17 >/dev/null || return 1
-  for _ in $(seq 60); do
-    docker exec "$name" pg_isready -U postgres >/dev/null 2>&1 && break
+  # Over TCP: the image's first-start setup server listens only on the socket,
+  # so a socket check can pass just before that server shuts down again.
+  local waited=0
+  until docker exec "$name" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; do
+    if [ "$waited" -ge 120 ]; then
+      echo "restore test: Postgres was not ready after ${waited}s" >&2
+      return 1
+    fi
     sleep 1
+    waited=$((waited + 1))
   done
-  sleep 2
   docker exec -i "$name" pg_restore -U postgres -d postgres --no-owner < "${dir}/app.dump" || return 1
   count="$(docker exec "$name" psql -U postgres -tAc 'select count(*) from "AuthUser"')" || return 1
   [ "$count" -ge 1 ]
