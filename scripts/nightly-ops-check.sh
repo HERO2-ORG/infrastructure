@@ -21,7 +21,7 @@ INTERNAL=internal-deploy-contabo
 HOSTS=(prod-deploy-contabo staging-deploy-contabo internal-deploy-contabo)
 REPOS=(backend hero2-app internal-system infrastructure trip-inference website partnerwebsite)
 ORG=HERO2-ORG
-SSH=(ssh -o ConnectTimeout=20 -o BatchMode=yes)
+SSH=(ssh -o ConnectTimeout=20 -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
 NOW_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 SINCE_24H="$(python3 -c 'import datetime;print((datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"))')"
 
