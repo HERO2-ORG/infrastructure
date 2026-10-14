@@ -10,3 +10,4 @@
     - docker
     - ufw
     - monitoring-client
+    - backup-client

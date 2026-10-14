@@ -9,3 +9,4 @@
     - docker
     - ufw
     - monitoring-server
+    - backup-server

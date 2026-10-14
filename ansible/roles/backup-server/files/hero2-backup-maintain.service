@@ -1,0 +1,11 @@
+[Unit]
+Description=Prune, check and restore-test the environments' restic repositories
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/hero2-backup/maintain.env
+ExecStart=/usr/local/bin/hero2-backup-maintain.sh
+Nice=10
+IOSchedulingClass=idle

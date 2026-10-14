@@ -67,13 +67,21 @@ jobs:
         if: always()
         run: rm -f ansible/vault_password
 
+  # After internal: its vault bootstrap may have just committed secrets (the
+  # backup credentials) that the app VMs need, so check out the branch tip.
   deploy-staging:
-    if: github.event_name == 'push' || inputs.environment == 'all' || inputs.environment == 'staging'
+    needs: deploy-internal
+    if: |
+      always() &&
+      (needs.deploy-internal.result == 'success' || needs.deploy-internal.result == 'skipped') &&
+      (github.event_name == 'push' || inputs.environment == 'all' || inputs.environment == 'staging')
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Install Ansible
         run: |
@@ -110,6 +118,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Install Ansible
         run: |

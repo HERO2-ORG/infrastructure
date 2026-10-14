@@ -1,0 +1,5 @@
+- name: Restart backup server
+  community.docker.docker_compose_v2:
+    project_src: "{{ backup_server_stack_path }}"
+    state: restarted
+  when: not ansible_check_mode
