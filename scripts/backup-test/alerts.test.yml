@@ -7,15 +7,15 @@ tests:
   - name: a backup that stops reporting for more than 26 hours fires
     interval: 1m
     input_series:
-      - series: 'hero2_backup_last_success_timestamp_seconds{env="staging",instance="s"}'
+      - series: 'hero2_backup_last_success_timestamp_seconds{backup_env="staging",env="staging",instance="s"}'
         values: '0x1700'
-      - series: 'hero2_backup_last_success_timestamp_seconds{env="production",instance="p"}'
+      - series: 'hero2_backup_last_success_timestamp_seconds{backup_env="production",env="production",instance="p"}'
         values: '97000x1700'
     alert_rule_test:
       - eval_time: 27h
         alertname: BackupMissing
         exp_alerts:
-          - exp_labels: {severity: critical, notify_resolved: "true", env: staging, instance: s}
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: staging, env: staging, instance: s}
             exp_annotations:
               summary: "No successful backup in over a day"
               description: "staging has gone 1d 3h 0m 0s without a complete backup. Check `journalctl -u hero2-backup` on the app VM."
@@ -23,7 +23,7 @@ tests:
   - name: an environment that never reported fires after a day
     interval: 1m
     input_series:
-      - series: 'hero2_backup_last_success_timestamp_seconds{env="staging",instance="s"}'
+      - series: 'hero2_backup_last_success_timestamp_seconds{backup_env="staging",env="staging",instance="s"}'
         values: '0x1700'
     alert_rule_test:
       - eval_time: 25h
@@ -32,7 +32,7 @@ tests:
       - eval_time: 27h
         alertname: BackupNeverReported
         exp_alerts:
-          - exp_labels: {severity: critical, notify_resolved: "true", env: production}
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: production}
             exp_annotations:
               summary: "An environment has never reported a backup"
               description: "production has no backup metric at all. Check that hero2-backup.timer is enabled on its VM and that node-exporter reads /var/lib/node-exporter."
@@ -40,13 +40,13 @@ tests:
   - name: a failed nightly run warns
     interval: 1m
     input_series:
-      - series: 'hero2_backup_last_run_success{env="production",instance="p"}'
+      - series: 'hero2_backup_last_run_success{backup_env="production",env="production",instance="p"}'
         values: '0x20'
     alert_rule_test:
       - eval_time: 10m
         alertname: BackupFailed
         exp_alerts:
-          - exp_labels: {severity: warning, notify_resolved: "true", env: production, instance: p}
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: production, env: production, instance: p}
             exp_annotations:
               summary: "Last night's backup failed"
               description: "The latest backup run on production failed; the previous snapshot is still the newest. Check `journalctl -u hero2-backup` on the app VM."
@@ -54,21 +54,66 @@ tests:
   - name: a failed restore test or check fires, a passing one does not
     interval: 1m
     input_series:
-      - series: 'hero2_backup_restore_test_success{env="production",instance="i"}'
+      - series: 'hero2_backup_restore_test_success{backup_env="production",env="internal",instance="i"}'
         values: '0x20'
-      - series: 'hero2_backup_restore_test_success{env="staging",instance="i"}'
+      - series: 'hero2_backup_restore_test_success{backup_env="staging",env="internal",instance="i"}'
         values: '1x20'
-      - series: 'hero2_backup_check_success{env="staging",instance="i"}'
+      - series: 'hero2_backup_check_success{backup_env="staging",env="internal",instance="i"}'
         values: '0x20'
     alert_rule_test:
       - eval_time: 10m
         alertname: BackupUnusable
         exp_alerts:
-          - exp_labels: {severity: critical, notify_resolved: "true", env: production, instance: i}
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: production, env: internal, instance: i}
             exp_annotations:
               summary: "A backup failed its restore test or data check"
-              description: "The production backups could not be restored or failed `restic check`. Check `journalctl -u hero2-backup-maintain` on the internal VM."
-          - exp_labels: {severity: critical, notify_resolved: "true", env: staging, instance: i}
+              description: "The production backups could not be restored, failed `restic check`, or have not been tested for over a week. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: staging, env: internal, instance: i}
             exp_annotations:
               summary: "A backup failed its restore test or data check"
-              description: "The staging backups could not be restored or failed `restic check`. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+              description: "The staging backups could not be restored, failed `restic check`, or have not been tested for over a week. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+
+  - name: forged snapshots, a failed prune and stale upkeep fire
+    interval: 1m
+    input_series:
+      - series: 'hero2_backup_suspect_snapshots{backup_env="production",env="internal",instance="i"}'
+        values: '1x12100'
+      - series: 'hero2_backup_prune_success{backup_env="staging",env="internal",instance="i"}'
+        values: '0x12100'
+      - series: 'hero2_backup_prune_timestamp_seconds{backup_env="production",env="internal",instance="i"}'
+        values: '0x12100'
+      - series: 'hero2_backup_restore_test_timestamp_seconds{backup_env="staging",env="internal",instance="i"}'
+        values: '0x12100'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: BackupTampered
+        exp_alerts:
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: production, env: internal, instance: i}
+            exp_annotations:
+              summary: "Backups hold snapshots with a false time"
+              description: "production has 1 snapshot(s) whose time differs from when the server received them, so pruning is stopped. An app VM may be compromised. Check `journalctl -u hero2-backup-maintain` on the internal VM before removing anything."
+      - eval_time: 2h
+        alertname: BackupUpkeepFailing
+        exp_alerts:
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: staging, env: internal, instance: i}
+            exp_annotations:
+              summary: "Backup upkeep is failing or has stopped"
+              description: "The upkeep of the staging backups failed or has not run on time, so old snapshots are not pruned or checked. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+      - eval_time: 50h
+        alertname: BackupUpkeepFailing
+        exp_alerts:
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: staging, env: internal, instance: i}
+            exp_annotations:
+              summary: "Backup upkeep is failing or has stopped"
+              description: "The upkeep of the staging backups failed or has not run on time, so old snapshots are not pruned or checked. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: production, env: internal, instance: i}
+            exp_annotations:
+              summary: "Backup upkeep is failing or has stopped"
+              description: "The upkeep of the production backups failed or has not run on time, so old snapshots are not pruned or checked. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+      - eval_time: 200h
+        alertname: BackupUnusable
+        exp_alerts:
+          - exp_labels: {severity: critical, notify_resolved: "true", backup_env: staging, env: internal, instance: i}
+            exp_annotations:
+              summary: "A backup failed its restore test or data check"
+              description: "The staging backups could not be restored, failed `restic check`, or have not been tested for over a week. Check `journalctl -u hero2-backup-maintain` on the internal VM."

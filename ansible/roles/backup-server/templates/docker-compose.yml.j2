@@ -21,6 +21,9 @@ services:
       - --tls-cert=/tls/rest-server.crt
       - --tls-key=/tls/rest-server.key
       - --htpasswd-file=/tls/.htpasswd
+      # Append-only cannot be pruned by clients, so cap what they can add on a
+      # disk the monitoring stack shares.
+      - --max-size={{ backup_max_bytes }}
     volumes:
       - {{ backup_repo_path }}:/data
       - {{ backup_server_stack_path }}/tls:/tls:ro

@@ -2,7 +2,7 @@
 # driving sibling containers through the mounted Docker socket.
 FROM debian:bookworm-slim
 ARG TARGETARCH
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl bzip2 docker.io shellcheck \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl bzip2 docker.io shellcheck python3 \
   && rm -rf /var/lib/apt/lists/*
 RUN set -eu; \
   case "$TARGETARCH" in \

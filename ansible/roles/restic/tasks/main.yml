@@ -10,8 +10,10 @@
     cmd: "bunzip2 -c /usr/local/lib/restic-{{ restic_version }}.bz2 > /usr/local/bin/restic-{{ restic_version }} && chmod 0755 /usr/local/bin/restic-{{ restic_version }}"
     creates: "/usr/local/bin/restic-{{ restic_version }}"
 
+# Check mode neither downloads nor unpacks, so there is nothing to link to yet.
 - name: Point restic at the pinned version
   ansible.builtin.file:
     src: "/usr/local/bin/restic-{{ restic_version }}"
     dest: /usr/local/bin/restic
     state: link
+  when: not ansible_check_mode

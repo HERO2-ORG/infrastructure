@@ -1,10 +1,14 @@
+# The Docker guard (ufw role) must cover the rest-server port before it opens.
+- name: Apply pending firewall changes
+  ansible.builtin.meta: flush_handlers
+
 - name: Install restic
   ansible.builtin.import_role:
     name: restic
 
-- name: Install passlib for the htpasswd module
+- name: Install passlib for the htpasswd module and Python for the upkeep script
   ansible.builtin.apt:
-    name: python3-passlib
+    name: [python3, python3-passlib]
     state: present
 
 - name: Create backup directories

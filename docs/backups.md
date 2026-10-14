@@ -6,11 +6,14 @@ Every night each app VM (staging, production) backs up the app database, the Key
 | --- | --- |
 | Nightly backup | `hero2-backup.timer` on each app VM, 03:15 UTC plus up to 20 minutes |
 | Repositories | `/srv/data/backups/<env>` on the internal VM, served by an append-only rest-server on port 8000 |
-| Upkeep | `hero2-backup-maintain.timer` on the internal VM, 05:30 UTC: prune daily; data check and a restore of the app database into a throwaway Postgres on Sundays |
-| Alerts | `BackupMissing`, `BackupNeverReported`, `BackupFailed`, `BackupUnusable` |
+| Upkeep | `hero2-backup-maintain.timer` on the internal VM, 05:30 UTC: prune daily; data check on Sundays; a restore of the app database into a throwaway Postgres on Sundays, and daily while the last one failed |
+| Alerts | `BackupMissing`, `BackupNeverReported`, `BackupFailed`, `BackupUnusable`, `BackupUpkeepFailing`, `BackupTampered` (metrics labelled `backup_env`) |
+| Size cap | rest-server refuses uploads past 20 GiB in total |
 | Secrets | `RESTIC_PASSWORD_<ENV>` (encryption), `RESTIC_REST_PASSWORD_<ENV>` (server login), `BACKUP_TLS_BUNDLE`, in `ansible/secrets.yml.enc` |
 
-The app VMs can add snapshots but cannot delete them, so a compromised app VM cannot destroy its own backups. Losing a `RESTIC_PASSWORD_<ENV>` makes that environment's backups unreadable; the vault is the only copy.
+The app VMs can add snapshots but cannot delete or rewrite them. A compromised app VM could still add snapshots stamped with a false time, which the retention policy would keep in place of real ones, so upkeep compares each snapshot's time with when the server received it and stops pruning that repository (`BackupTampered`) on any mismatch. Remove forged snapshots by hand with `restic forget <id>` on the internal VM once the cause is known.
+
+Losing a `RESTIC_PASSWORD_<ENV>` makes that environment's backups unreadable; the vault is the only copy. Until the second copy on Backblaze B2 exists, losing the internal VM loses every backup.
 
 ## Restore
 
@@ -25,16 +28,15 @@ restic snapshots
 ### One database
 
 ```bash
-restic dump latest --tag postgres postgres.dump > /tmp/app.dump        # or --tag keycloak-db keycloak-db.dump
-scp /tmp/app.dump deploy@<app vm>:/tmp/
+restic dump latest --tag postgres postgres.dump > /tmp/app.dump        # Keycloak: --tag keycloak-db keycloak-db.dump
 ```
 
-On the app VM, stop the backend so nothing writes during the restore, then load the dump into a fresh database:
+Copy the dump through your own machine, which reaches both VMs (`scp internal:/tmp/app.dump .`, then `scp app.dump <app vm>:/tmp/`). On the app VM, stop what writes to the database, then replace its contents. `--clean --if-exists` drops and recreates each object in the dump; tables created after the backup stay, so for a full rollback drop and recreate the database first.
 
 ```bash
-docker stop backend-backend-1
+docker stop backend-backend-1                     # Keycloak: hero2_keycloak
 docker exec -i backend-postgres-1 sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < /tmp/app.dump
-docker start backend-backend-1
+docker start backend-backend-1                    # Keycloak database: hero2_keycloak_db
 ```
 
 For a snapshot other than the latest, replace `latest` with its ID from `restic snapshots`.
@@ -57,9 +59,10 @@ Provision the VM, apply its Ansible playbook and deploy the backend so the conta
 ```bash
 sudo systemctl start hero2-backup.service && journalctl -u hero2-backup -n 50          # app VM
 sudo systemctl start hero2-backup-maintain.service && journalctl -u hero2-backup-maintain -n 80   # internal VM
+sudo sh -c 'set -a; . /etc/hero2-backup/maintain.env; BACKUP_FORCE_CHECK=1 /usr/local/bin/hero2-backup-maintain.sh'   # internal VM: check and restore-test now
 cat /var/lib/node-exporter/hero2_backup*.prom
 ```
 
 ## Test
 
-`scripts/backup-test/test.sh` runs the backup and upkeep scripts against real containers (rest-server, two Postgres, a stand-in photo store), including the append-only refusal and a damaged repository. `scripts/backup-test/alerts.sh` unit-tests the alert rules with promtool.
+`scripts/backup-test/test.sh` runs the backup and upkeep scripts against real containers (rest-server, two Postgres, a stand-in photo store), including the append-only refusal, a forged snapshot and a damaged repository. `scripts/backup-test/alerts.sh` unit-tests the alert rules with promtool. `scripts/backup-test/check-mode.sh` applies the restic role in check mode to a fresh host, as the production deploy does first.

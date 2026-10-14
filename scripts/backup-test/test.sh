@@ -93,6 +93,18 @@ docker start hbt-pg >/dev/null
 runner /roles/backup-server/files/hero2-backup-maintain.sh >"$log" 2>&1; check "maintenance run succeeds" $?
 [ "$(metric hero2_backup_restore_staging.prom hero2_backup_restore_test_success)" = 1 ]; check "the restore test loads the dump and finds the users" $?
 
+# A compromised app VM holds the repository password and can add snapshots
+# stamped with any time; backdated ones would survive the next prune in place
+# of the real history.
+runner 'restic backup --tag postgres --stdin --stdin-filename postgres.dump --time "2026-01-01 00:00:00" < /etc/hostname' >/dev/null 2>&1
+before="$(runner 'restic snapshots --json' | grep -o '"short_id"' | wc -l | tr -d ' ')"
+runner /roles/backup-server/files/hero2-backup-maintain.sh >"$log" 2>&1 && rc=1 || rc=0
+check "a snapshot stamped with a false time stops the prune" $rc
+after="$(runner 'restic snapshots --json' | grep -o '"short_id"' | wc -l | tr -d ' ')"
+[ "$before" = "$after" ]; check "nothing is pruned from a repository with forged snapshots ($before -> $after)" $?
+[ "$(metric hero2_backup_prune_staging.prom hero2_backup_suspect_snapshots)" = 1 ]; check "the forged snapshot is reported" $?
+[ "$(metric hero2_backup_prune_staging.prom hero2_backup_prune_success)" = 0 ]; check "the skipped prune is reported" $?
+
 runner 'pack=$(find /repos/staging/data -type f | head -1); printf garbage > "$pack"'
 BACKUP_FORCE_CHECK=1 runner 'BACKUP_FORCE_CHECK=1 /roles/backup-server/files/hero2-backup-maintain.sh' >"$log" 2>&1 && rc=1 || rc=0
 check "a damaged repository fails maintenance" $rc

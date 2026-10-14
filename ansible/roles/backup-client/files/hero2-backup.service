@@ -5,6 +5,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
+TimeoutStartSec=2h
 EnvironmentFile=/etc/hero2-backup/env
 ExecStart=/usr/local/bin/hero2-backup.sh
 Nice=10

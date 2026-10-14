@@ -20,11 +20,11 @@ write_metrics() {
   {
     echo "# HELP hero2_backup_last_run_success Whether the latest nightly backup run succeeded"
     echo "# TYPE hero2_backup_last_run_success gauge"
-    echo "hero2_backup_last_run_success{env=\"${BACKUP_ENV}\"} ${ok}"
+    echo "hero2_backup_last_run_success{backup_env=\"${BACKUP_ENV}\"} ${ok}"
     if [ -n "$last" ]; then
       echo "# HELP hero2_backup_last_success_timestamp_seconds When every part of a nightly backup last succeeded"
       echo "# TYPE hero2_backup_last_success_timestamp_seconds gauge"
-      echo "hero2_backup_last_success_timestamp_seconds{env=\"${BACKUP_ENV}\"} ${last}"
+      echo "hero2_backup_last_success_timestamp_seconds{backup_env=\"${BACKUP_ENV}\"} ${last}"
     fi
   } > "$tmp"
   chmod 0644 "$tmp"
@@ -40,9 +40,11 @@ for svc in postgres keycloak-db; do
     echo "expected one running ${svc} container in ${project}, found: ${container:-none}" >&2
     false
   fi
+  # Uncompressed (-Z0): restic compresses the repository itself and can only
+  # deduplicate what pg_dump has not already compressed.
   # shellcheck disable=SC2016 # the variables expand inside the database container
   restic backup --tag "$svc" --stdin-filename "${svc}.dump" --stdin-from-command -- \
-    docker exec "$container" sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"'
+    docker exec "$container" sh -c 'pg_dump -U "$POSTGRES_USER" -Fc -Z0 "$POSTGRES_DB"'
 done
 
 restic backup --tag minio "$minio_dir"
