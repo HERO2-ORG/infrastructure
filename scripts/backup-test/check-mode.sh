@@ -11,7 +11,9 @@ trap 'docker rm -f "$name" >/dev/null 2>&1; rm -rf "$work"' EXIT
 
 docker rm -f "$name" >/dev/null 2>&1 || true
 docker run -d --name "$name" debian:bookworm-slim sleep 600 >/dev/null
-docker exec "$name" sh -c 'apt-get -qq update >/dev/null && apt-get -qq install -y python3 bzip2 >/dev/null'
+# Python and python3-apt only, like a fresh Ubuntu VM; and the empty binary a failed unpack once left
+# on staging, which the role must replace rather than trust.
+docker exec "$name" sh -c 'apt-get -qq update >/dev/null && apt-get -qq install -y python3 python3-apt >/dev/null && touch /usr/local/bin/restic-0.19.1'
 
 cat > "$work/play.yml" <<PLAY
 - hosts: $name
