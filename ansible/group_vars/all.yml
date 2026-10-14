@@ -19,12 +19,13 @@ monitoring_app_metrics_ports:
   - "{{ monitoring_cadvisor_port }}"
   - "{{ monitoring_redis_exporter_port }}"
 
-# Databases the internal VM publishes through Docker (internal-system-db on
-# 5433 for the analytics warehouse, hero2_postgres on 5432). Reachable only
+# Ports the internal VM publishes through Docker (internal-system-db on 5433 for
+# the analytics warehouse, hero2_postgres on 5432, the backup rest-server). Reachable only
 # from the app VMs; every other source is dropped in DOCKER-USER.
 docker_guarded_ports:
   - 5432
   - 5433
+  - "{{ backup_rest_port }}"
 docker_guarded_allowed_sources: "{{ groups.app_vms }}"
 
 loki_port: 3100
@@ -66,3 +67,15 @@ dns_check_names:
 
 obsolete_root_paths:
   - /root/.openclaw
+
+# Nightly backups: each app VM sends encrypted snapshots to an append-only
+# rest-server on the internal VM (roles backup-client, backup-server).
+backup_environments:
+  - staging
+  - production
+backup_rest_port: 8000
+backup_server_stack_path: "{{ stack_base_path }}/backup"
+backup_repo_path: "{{ data_base_path }}/backups"
+backup_max_bytes: "{{ 20 * 1024 ** 3 }}"
+backup_tls_cert: "{{ BACKUP_TLS_BUNDLE | regex_search('-----BEGIN CERTIFICATE-----[\\s\\S]+?-----END CERTIFICATE-----') }}"
+backup_tls_key: "{{ BACKUP_TLS_BUNDLE | regex_search('-----BEGIN PRIVATE KEY-----[\\s\\S]+?-----END PRIVATE KEY-----') }}"

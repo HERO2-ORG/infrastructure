@@ -1,0 +1,19 @@
+- name: Download restic
+  ansible.builtin.get_url:
+    url: "https://github.com/restic/restic/releases/download/v{{ restic_version }}/restic_{{ restic_version }}_linux_{{ restic_arch[ansible_facts.architecture] }}.bz2"
+    dest: "/usr/local/lib/restic-{{ restic_version }}.bz2"
+    checksum: "sha256:{{ restic_sha256[ansible_facts.architecture] }}"
+    mode: "0644"
+
+- name: Unpack restic
+  ansible.builtin.shell:
+    cmd: "bunzip2 -c /usr/local/lib/restic-{{ restic_version }}.bz2 > /usr/local/bin/restic-{{ restic_version }} && chmod 0755 /usr/local/bin/restic-{{ restic_version }}"
+    creates: "/usr/local/bin/restic-{{ restic_version }}"
+
+# Check mode neither downloads nor unpacks, so there is nothing to link to yet.
+- name: Point restic at the pinned version
+  ansible.builtin.file:
+    src: "/usr/local/bin/restic-{{ restic_version }}"
+    dest: /usr/local/bin/restic
+    state: link
+  when: not ansible_check_mode

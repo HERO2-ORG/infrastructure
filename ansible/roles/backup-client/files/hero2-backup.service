@@ -1,0 +1,12 @@
+[Unit]
+Description=Nightly encrypted backup of the databases and photo store
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=2h
+EnvironmentFile=/etc/hero2-backup/env
+ExecStart=/usr/local/bin/hero2-backup.sh
+Nice=10
+IOSchedulingClass=idle

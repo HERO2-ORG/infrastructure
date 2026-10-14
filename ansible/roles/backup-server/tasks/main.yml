@@ -1,0 +1,92 @@
+# The Docker guard (ufw role) must cover the rest-server port before it opens.
+- name: Apply pending firewall changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Install restic
+  ansible.builtin.import_role:
+    name: restic
+
+- name: Install passlib for the htpasswd module and Python for the upkeep script
+  ansible.builtin.apt:
+    name: [python3, python3-passlib]
+    state: present
+
+- name: Create backup directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ backup_server_stack_path }}"
+    - "{{ backup_server_stack_path }}/tls"
+    - "{{ backup_repo_path }}"
+    - /etc/hero2-backup
+
+- name: Write the rest-server certificate and key
+  ansible.builtin.copy:
+    content: "{{ item.content }}\n"
+    dest: "{{ backup_server_stack_path }}/tls/{{ item.name }}"
+    mode: "0600"
+  loop:
+    - { name: rest-server.crt, content: "{{ backup_tls_cert }}" }
+    - { name: rest-server.key, content: "{{ backup_tls_key }}" }
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+  notify: Restart backup server
+
+- name: Write the rest-server users
+  community.general.htpasswd:
+    path: "{{ backup_server_stack_path }}/tls/.htpasswd"
+    name: "{{ item }}"
+    password: "{{ lookup('vars', 'RESTIC_REST_PASSWORD_' ~ item | upper) }}"
+    crypt_scheme: bcrypt
+    mode: "0600"
+  loop: "{{ backup_environments }}"
+  no_log: true
+  notify: Restart backup server
+
+- name: Write the rest-server compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ backup_server_stack_path }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Start rest-server
+  community.docker.docker_compose_v2:
+    project_src: "{{ backup_server_stack_path }}"
+    state: present
+    pull: missing
+  when: not ansible_check_mode
+
+- name: Install the upkeep script
+  ansible.builtin.copy:
+    src: hero2-backup-maintain.sh
+    dest: /usr/local/bin/hero2-backup-maintain.sh
+    mode: "0755"
+
+- name: Write the repository passwords for upkeep
+  ansible.builtin.template:
+    src: hero2-backup-maintain.env.j2
+    dest: /etc/hero2-backup/maintain.env
+    mode: "0600"
+  no_log: true
+
+- name: Install the upkeep units
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - hero2-backup-maintain.service
+    - hero2-backup-maintain.timer
+
+- name: Enable the upkeep timer
+  ansible.builtin.systemd:
+    name: hero2-backup-maintain.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

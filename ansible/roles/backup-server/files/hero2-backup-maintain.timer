@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily restic repository upkeep, after the app VMs' nightly backups
+
+[Timer]
+OnCalendar=*-*-* 05:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
