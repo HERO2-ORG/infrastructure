@@ -1,0 +1,10 @@
+[Unit]
+Description=Record live transit vehicle positions every two minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=120s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

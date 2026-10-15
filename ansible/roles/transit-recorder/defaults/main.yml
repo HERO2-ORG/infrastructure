@@ -1,0 +1,5 @@
+transit_recorder_packages:
+  - gtfs-realtime-bindings==1.0.0
+  - protobuf==5.29.3
+  - pyarrow==17.0.0
+  - requests==2.32.3

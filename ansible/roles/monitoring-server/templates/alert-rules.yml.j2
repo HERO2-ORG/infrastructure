@@ -255,3 +255,17 @@ groups:
 {% raw %}
           description: "{{ $labels.backup_env }} has {{ $value }} snapshot(s) whose time differs from when the server received them, so pruning is stopped. An app VM may be compromised. Check `journalctl -u hero2-backup-maintain` on the internal VM before removing anything."
 {% endraw %}
+
+  # Live transit positions (role transit-recorder). 511 keeps no archive, so a
+  # gap in the recording can never be back-filled.
+  - name: transit
+    rules:
+      - alert: TransitRecorderStale
+        expr: time() - hero2_transit_rt_last_success_timestamp_seconds > 1800 or absent(hero2_transit_rt_last_success_timestamp_seconds)
+        for: 15m
+        labels:
+          severity: critical
+          notify_resolved: "true"
+        annotations:
+          summary: "Live transit positions are not being recorded"
+          description: "No 511 vehicle-position snapshot in 30 minutes; these cannot be back-filled. Check `systemctl status hero2-transit-record` on the internal VM."

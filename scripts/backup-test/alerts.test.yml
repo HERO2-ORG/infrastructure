@@ -117,3 +117,19 @@ tests:
             exp_annotations:
               summary: "A backup failed its restore test or data check"
               description: "The staging backups could not be restored, failed `restic check`, or have not been tested for over a week. Check `journalctl -u hero2-backup-maintain` on the internal VM."
+
+  - name: a transit recorder stuck for an hour fires, one that keeps advancing does not
+    interval: 1m
+    input_series:
+      - series: 'hero2_transit_rt_last_success_timestamp_seconds{env="internal",instance="stuck"}'
+        values: '0x200'
+      - series: 'hero2_transit_rt_last_success_timestamp_seconds{env="internal",instance="live"}'
+        values: '0+60x200'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: TransitRecorderStale
+        exp_alerts:
+          - exp_labels: {severity: critical, notify_resolved: "true", env: internal, instance: stuck}
+            exp_annotations:
+              summary: "Live transit positions are not being recorded"
+              description: "No 511 vehicle-position snapshot in 30 minutes; these cannot be back-filled. Check `systemctl status hero2-transit-record` on the internal VM."

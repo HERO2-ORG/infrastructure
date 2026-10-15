@@ -1,0 +1,9 @@
+[Unit]
+Description=Merge each past day of transit snapshots into one parquet file
+
+[Service]
+Type=oneshot
+TimeoutStartSec=1h
+ExecStart=/opt/hero2-transit/bin/python /opt/hero2-transit/compact_vehicle_positions.py
+Nice=10
+IOSchedulingClass=idle

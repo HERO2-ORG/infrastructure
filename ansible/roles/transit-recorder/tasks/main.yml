@@ -1,0 +1,70 @@
+- name: Install python3-venv
+  ansible.builtin.apt:
+    name: python3-venv
+    state: present
+
+- name: Create the recorder virtualenv
+  ansible.builtin.command:
+    cmd: python3 -m venv /opt/hero2-transit
+    creates: /opt/hero2-transit/bin/pip
+
+# Check mode cannot create the venv, so there is no pip to ask yet.
+- name: Install the pinned packages
+  ansible.builtin.pip:
+    name: "{{ transit_recorder_packages }}"
+    virtualenv: /opt/hero2-transit
+  when: not ansible_check_mode
+
+- name: Create the recorder config directory
+  ansible.builtin.file:
+    path: /etc/hero2-transit
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write the 511 API token
+  ansible.builtin.template:
+    src: transit-recorder.env.j2
+    dest: /etc/hero2-transit/env
+    mode: "0600"
+  no_log: true
+
+- name: Create the transit data directory
+  ansible.builtin.file:
+    path: /srv/data/transit
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the recorder scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/opt/hero2-transit/{{ item }}"
+    mode: "0755"
+  loop:
+    - record_vehicle_positions.py
+    - compact_vehicle_positions.py
+
+- name: Install the recorder units
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - hero2-transit-record.service
+    - hero2-transit-record.timer
+    - hero2-transit-compact.service
+    - hero2-transit-compact.timer
+
+- name: Enable the recorder timers
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - hero2-transit-record.timer
+    - hero2-transit-compact.timer
+  when: not ansible_check_mode
