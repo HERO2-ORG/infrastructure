@@ -27,6 +27,13 @@ def decode_body(body):
     return gzip.decompress(body) if body[:2] == b"\x1f\x8b" else body
 
 
+def agency_of(*identifiers):
+    for identifier in identifiers:
+        if ":" in identifier:
+            return identifier.split(":", 1)[0]
+    return ""
+
+
 def rows_from_feed(body):
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.ParseFromString(body)
@@ -36,14 +43,13 @@ def rows_from_feed(body):
             continue
         v = entity.vehicle
         trip_id = v.trip.trip_id
-        agency = getattr(v.trip, "agency_id", "") or (trip_id.split(":", 1)[0] if ":" in trip_id else "")
         rows.append({
             "feed_ts": feed.header.timestamp,
             "vehicle_ts": v.timestamp,
             "vehicle_id": v.vehicle.id,
             "trip_id": trip_id,
             "route_id": v.trip.route_id,
-            "agency": agency,
+            "agency": agency_of(trip_id, v.trip.route_id, v.vehicle.id),
             "lat": round(v.position.latitude, 5),
             "lon": round(v.position.longitude, 5),
             "bearing": round(v.position.bearing, 6),
@@ -86,12 +92,19 @@ def main():
     )
     response.raise_for_status()
     rows = rows_from_feed(decode_body(response.content))
+    if not rows:
+        raise ValueError("feed holds no vehicles")
     write_snapshot(rows, STORE, METRICS, int(time.time()))
 
 
-if __name__ == "__main__":
+def run_cli():
     try:
         main()
     except Exception as exc:
         print(f"recording failed: {type(exc).__name__}", file=sys.stderr)
         sys.exit(1)
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    run_cli()
