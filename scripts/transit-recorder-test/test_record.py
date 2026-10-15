@@ -201,6 +201,7 @@ def _agency(trip_id, route_id, vehicle_id):
     e.id = "1"
     v = e.vehicle
     v.trip.trip_id, v.trip.route_id, v.vehicle.id = trip_id, route_id, vehicle_id
+    v.position.latitude = v.position.longitude = 0.0
     return rec.rows_from_feed(f.SerializeToString())[0]["agency"]
 
 
@@ -209,3 +210,74 @@ def test_agency_falls_back_from_trip_to_route_to_vehicle():
     assert _agency("123", "SF:9", "GG:3") == "SF"
     assert _agency("123", "9", "GG:3") == "GG"
     assert _agency("123", "9", "3") == ""
+
+
+def _sparse_feed():
+    f = gtfs_realtime_pb2.FeedMessage()
+    f.header.gtfs_realtime_version = "2.0"
+    f.header.timestamp = 1792000000
+    e = f.entity.add()
+    e.id = "1"
+    v = e.vehicle
+    v.position.latitude = 37.87
+    v.position.longitude = -122.26
+    return f.SerializeToString()
+
+
+def test_absent_fields_are_null_not_zero():
+    [row] = rec.rows_from_feed(_sparse_feed())
+    assert row == {"feed_ts": 1792000000, "vehicle_ts": None, "vehicle_id": None, "trip_id": None,
+                   "route_id": None, "agency": "", "lat": 37.87, "lon": -122.26, "bearing": None, "speed": None}
+
+
+def test_present_zero_is_kept_as_zero():
+    f = gtfs_realtime_pb2.FeedMessage()
+    f.header.gtfs_realtime_version = "2.0"
+    e = f.entity.add()
+    e.id = "1"
+    e.vehicle.position.latitude = 1.0
+    e.vehicle.position.longitude = 2.0
+    e.vehicle.position.speed = 0.0
+    e.vehicle.timestamp = 0
+    [row] = rec.rows_from_feed(f.SerializeToString())
+    assert row["speed"] == 0.0 and row["vehicle_ts"] == 0 and row["bearing"] is None and row["feed_ts"] is None
+
+
+def test_vehicle_without_position_is_skipped():
+    f = gtfs_realtime_pb2.FeedMessage()
+    f.header.gtfs_realtime_version = "2.0"
+    e = f.entity.add()
+    e.id = "1"
+    e.vehicle.vehicle.id = "bus-1"
+    assert rec.rows_from_feed(f.SerializeToString()) == []
+
+
+def test_nulls_survive_record_and_compact(tmp_path):
+    store = tmp_path / "store"
+    rec.write_snapshot(rec.rows_from_feed(_sparse_feed()), store, tmp_path / "m", now=1791000000)
+    compact.compact_store(store, today="2026-10-14")
+    [row] = _day_rows(store, "2026-10-03")
+    assert row["bearing"] is None and row["speed"] is None and row["vehicle_id"] is None and row["vehicle_ts"] is None
+
+
+def test_recompacting_same_snapshot_with_null_keys_adds_no_duplicates(tmp_path):
+    store = tmp_path / "store"
+    snap = store / "dt=2026-10-12" / "snap-1.parquet"
+    rows = rec.rows_from_feed(_sparse_feed())
+    rec.write_parquet(rows, snap)
+    saved = snap.read_bytes()
+    compact.compact_store(store, today="2026-10-14")
+    snap.write_bytes(saved)
+    compact.compact_store(store, today="2026-10-14")
+    assert len(_day_rows(store, "2026-10-12")) == 1
+    assert not snap.exists()
+
+
+def test_dedupe_ignores_non_key_columns(tmp_path):
+    store = tmp_path / "store"
+    [row] = rec.rows_from_feed(_feed())
+    rec.write_parquet([row], store / "dt=2026-10-12" / "snap-1.parquet")
+    compact.compact_store(store, today="2026-10-14")
+    rec.write_parquet([dict(row, lat=1.0)], store / "dt=2026-10-12" / "snap-2.parquet")
+    compact.compact_store(store, today="2026-10-14")
+    assert len(_day_rows(store, "2026-10-12")) == 1

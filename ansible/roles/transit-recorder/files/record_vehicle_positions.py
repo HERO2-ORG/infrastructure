@@ -34,26 +34,32 @@ def agency_of(*identifiers):
     return ""
 
 
+def present(message, field, convert=lambda value: value):
+    return convert(getattr(message, field)) if message.HasField(field) else None
+
+
 def rows_from_feed(body):
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.ParseFromString(body)
     rows = []
     for entity in feed.entity:
-        if not entity.HasField("vehicle"):
+        if not (entity.HasField("vehicle") and entity.vehicle.HasField("position")):
             continue
         v = entity.vehicle
-        trip_id = v.trip.trip_id
+        trip_id = present(v.trip, "trip_id")
+        route_id = present(v.trip, "route_id")
+        vehicle_id = present(v.vehicle, "id")
         rows.append({
-            "feed_ts": feed.header.timestamp,
-            "vehicle_ts": v.timestamp,
-            "vehicle_id": v.vehicle.id,
+            "feed_ts": present(feed.header, "timestamp"),
+            "vehicle_ts": present(v, "timestamp"),
+            "vehicle_id": vehicle_id,
             "trip_id": trip_id,
-            "route_id": v.trip.route_id,
-            "agency": agency_of(trip_id, v.trip.route_id, v.vehicle.id),
+            "route_id": route_id,
+            "agency": agency_of(trip_id or "", route_id or "", vehicle_id or ""),
             "lat": round(v.position.latitude, 5),
             "lon": round(v.position.longitude, 5),
-            "bearing": round(v.position.bearing, 6),
-            "speed": round(v.position.speed, 6),
+            "bearing": present(v.position, "bearing", lambda x: round(x, 6)),
+            "speed": present(v.position, "speed", lambda x: round(x, 6)),
         })
     return rows
 

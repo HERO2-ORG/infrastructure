@@ -5,15 +5,29 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from record_vehicle_positions import METRICS, SCHEMA, STORE, atomic_write
 
+KEY_SENTINELS = {"feed_ts": -1, "vehicle_ts": -1, "vehicle_id": "", "trip_id": ""}
 SUCCESS_METRIC = "hero2_transit_compact_last_success_timestamp_seconds"
 
 
 def count_rows(path):
     return pq.read_table(path).num_rows
+
+
+def with_keys(table):
+    for name, sentinel in KEY_SENTINELS.items():
+        table = table.append_column(f"key_{name}", pc.fill_null(table[name], sentinel))
+    return table
+
+
+def new_rows(snapshot, existing_keys):
+    keys = [f"key_{name}" for name in KEY_SENTINELS]
+    fresh = with_keys(snapshot).join(existing_keys, keys=keys, join_type="left anti")
+    return fresh.select(SCHEMA.names)
 
 
 def compact_day(day_dir):
@@ -25,9 +39,8 @@ def compact_day(day_dir):
     if day_file.exists():
         existing = pq.read_table(day_file, schema=SCHEMA)
         tables.append(existing)
-        columns = SCHEMA.names
-        for s in snaps:
-            tables.append(pq.read_table(s, schema=SCHEMA).join(existing, keys=columns, join_type="left anti"))
+        existing_keys = with_keys(existing).select([f"key_{name}" for name in KEY_SENTINELS])
+        tables.extend(new_rows(pq.read_table(s, schema=SCHEMA), existing_keys) for s in snaps)
     else:
         tables = [pq.read_table(s, schema=SCHEMA) for s in snaps]
     merged = pa.concat_tables(tables)
