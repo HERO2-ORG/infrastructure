@@ -17,7 +17,7 @@ STORE = Path("/srv/data/transit/vehicle_positions")
 METRICS = Path("/var/lib/node-exporter")
 
 SCHEMA = pa.schema([
-    ("feed_ts", pa.int64()), ("vehicle_ts", pa.int64()), ("vehicle_id", pa.string()),
+    ("fetched_ts", pa.int64()), ("feed_ts", pa.int64()), ("vehicle_ts", pa.int64()), ("vehicle_id", pa.string()),
     ("trip_id", pa.string()), ("route_id", pa.string()), ("agency", pa.string()),
     ("lat", pa.float64()), ("lon", pa.float64()), ("bearing", pa.float64()), ("speed", pa.float64()),
 ])
@@ -84,7 +84,7 @@ def write_parquet(rows, path):
 
 def write_snapshot(rows, store, metrics_dir, now):
     day = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d")
-    write_parquet(rows, Path(store) / f"dt={day}" / f"snap-{now}.parquet")
+    write_parquet([dict(row, fetched_ts=now) for row in rows], Path(store) / f"dt={day}" / f"snap-{now}.parquet")
     text = (
         f"hero2_transit_rt_last_success_timestamp_seconds {now}\n"
         f"hero2_transit_rt_last_rows {len(rows)}\n"

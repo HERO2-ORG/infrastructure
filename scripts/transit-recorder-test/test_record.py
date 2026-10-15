@@ -273,11 +273,23 @@ def test_recompacting_same_snapshot_with_null_keys_adds_no_duplicates(tmp_path):
     assert not snap.exists()
 
 
-def test_dedupe_ignores_non_key_columns(tmp_path):
+def _untimed_feed(lat):
+    f = gtfs_realtime_pb2.FeedMessage()
+    f.header.gtfs_realtime_version = "2.0"
+    e = f.entity.add()
+    e.id = "1"
+    e.vehicle.vehicle.id = "bus-7"
+    e.vehicle.trip.trip_id = "AC:123"
+    e.vehicle.position.latitude = lat
+    e.vehicle.position.longitude = -122.26
+    return f.SerializeToString()
+
+
+def test_untimed_snapshots_of_one_vehicle_are_all_kept(tmp_path):
     store = tmp_path / "store"
-    [row] = rec.rows_from_feed(_feed())
-    rec.write_parquet([row], store / "dt=2026-10-12" / "snap-1.parquet")
+    rec.write_snapshot(rec.rows_from_feed(_untimed_feed(37.87)), store, tmp_path / "m", now=1791000000)
     compact.compact_store(store, today="2026-10-14")
-    rec.write_parquet([dict(row, lat=1.0)], store / "dt=2026-10-12" / "snap-2.parquet")
+    rec.write_snapshot(rec.rows_from_feed(_untimed_feed(37.88)), store, tmp_path / "m", now=1791000120)
     compact.compact_store(store, today="2026-10-14")
-    assert len(_day_rows(store, "2026-10-12")) == 1
+    rows = _day_rows(store, "2026-10-03")
+    assert [(r["fetched_ts"], r["lat"]) for r in rows] == [(1791000000, 37.87), (1791000120, 37.88)]

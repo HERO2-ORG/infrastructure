@@ -10,7 +10,12 @@ import pyarrow.parquet as pq
 
 from record_vehicle_positions import METRICS, SCHEMA, STORE, atomic_write
 
-KEY_SENTINELS = {"feed_ts": -1, "vehicle_ts": -1, "vehicle_id": "", "trip_id": ""}
+# A row is a duplicate only when the same fetch saw the same vehicle at the same
+# place, so re-running a snapshot adds nothing and distinct observations never
+# merge, whatever optional fields the feed left out.
+KEY_SENTINELS = {
+    "fetched_ts": -1, "feed_ts": -1, "vehicle_ts": -1, "vehicle_id": "", "trip_id": "", "lat": 0.0, "lon": 0.0,
+}
 SUCCESS_METRIC = "hero2_transit_compact_last_success_timestamp_seconds"
 
 
