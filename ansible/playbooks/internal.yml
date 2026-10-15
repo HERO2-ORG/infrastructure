@@ -10,3 +10,4 @@
     - ufw
     - monitoring-server
     - backup-server
+    - transit-recorder

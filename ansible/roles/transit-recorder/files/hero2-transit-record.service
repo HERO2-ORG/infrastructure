@@ -1,0 +1,10 @@
+[Unit]
+Description=Record one snapshot of live Bay Area transit vehicle positions
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=90
+EnvironmentFile=/etc/hero2-transit/env
+ExecStart=/opt/hero2-transit/bin/python /opt/hero2-transit/record_vehicle_positions.py
