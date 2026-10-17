@@ -74,12 +74,13 @@ for env in ${BACKUP_ENVS:-staging production}; do
   password_var="RESTIC_PASSWORD_$(echo "$env" | tr '[:lower:]' '[:upper:]')"
   export RESTIC_PASSWORD="${!password_var:?}"
 
-  if suspects="$(suspect_snapshots)"; then
-    suspect_count="$(echo "$suspects" | grep -c . || true)"
-  else
-    suspect_count=1
-  fi
-  if [ "$suspect_count" -gt 0 ]; then
+  # A listing that fails says nothing about tampering; it still blocks the
+  # prune, and BackupUpkeepFailing reports it.
+  suspect_count=0
+  if ! suspects="$(suspect_snapshots)"; then
+    echo "${env}: not pruning, could not list the snapshots" >&2
+    ok=0
+  elif suspect_count="$(echo "$suspects" | grep -c . || true)"; [ "$suspect_count" -gt 0 ]; then
     echo "${env}: not pruning, snapshots with a false time: ${suspects}" >&2
     ok=0
   elif restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune; then
