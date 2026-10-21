@@ -93,6 +93,13 @@ docker start hbt-pg >/dev/null
 runner /roles/backup-server/files/hero2-backup-maintain.sh >"$log" 2>&1; check "maintenance run succeeds" $?
 [ "$(metric hero2_backup_restore_staging.prom hero2_backup_restore_test_success)" = 1 ]; check "the restore test loads the dump and finds the users" $?
 
+# systemd starts the unit without HOME; restic then cannot open its cache and
+# fails every command, which must not read as forged snapshots.
+runner 'env -u HOME -u XDG_CACHE_HOME /roles/backup-server/files/hero2-backup-maintain.sh' >"$log" 2>&1 && rc=1 || rc=0
+check "a run where restic cannot start fails" $rc
+[ "$(metric hero2_backup_prune_staging.prom hero2_backup_suspect_snapshots)" = 0 ]; check "a failed listing is not reported as forged snapshots" $?
+[ "$(metric hero2_backup_prune_staging.prom hero2_backup_prune_success)" = 0 ]; check "the failed listing is reported as a failed prune" $?
+
 # A compromised app VM holds the repository password and can add snapshots
 # stamped with any time; backdated ones would survive the next prune in place
 # of the real history.
