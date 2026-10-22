@@ -22,7 +22,9 @@ monitoring_app_metrics_ports:
 # Ports the internal VM publishes through Docker (internal-system-db on 5433 for
 # the analytics warehouse, hero2_postgres on 5432, the backup rest-server, the MLflow
 # service-auth route on 5001). Reachable only from the app VMs; every other source is
-# dropped in DOCKER-USER.
+# dropped in DOCKER-USER. This guard is the only owner of DOCKER-USER: other repos'
+# playbooks must not install iptables-persistent, which removes ufw and restores a
+# stale rules.v4.
 docker_guarded_ports:
   - 5432
   - 5433
