@@ -20,11 +20,13 @@ monitoring_app_metrics_ports:
   - "{{ monitoring_redis_exporter_port }}"
 
 # Ports the internal VM publishes through Docker (internal-system-db on 5433 for
-# the analytics warehouse, hero2_postgres on 5432, the backup rest-server). Reachable only
-# from the app VMs; every other source is dropped in DOCKER-USER.
+# the analytics warehouse, hero2_postgres on 5432, the backup rest-server, the MLflow
+# service-auth route on 5001). Reachable only from the app VMs; every other source is
+# dropped in DOCKER-USER.
 docker_guarded_ports:
   - 5432
   - 5433
+  - 5001
   - "{{ backup_rest_port }}"
 docker_guarded_allowed_sources: "{{ groups.app_vms }}"
 
